@@ -16,7 +16,7 @@
     var STORAGE_KEYS = { theme: "payloadGen.theme", locale: "payloadGen.locale" };
     var THEMES = { light: "light", dark: "dark" };
     var DONATE_URL = "https://boosty.to/sketchystan1";
-    var LATEST_QUIC_VERSION = 0x6B3343CF;
+    var LATEST_QUIC_VERSION = 0x00000001;
 
     var CATEGORY_DEFS = [
         { id: "discovery", rank: 1, labelKey: "categoryDiscovery" },
@@ -33,6 +33,14 @@
         sipActions: [{ value: "OPTIONS", labelKey: "sipActionOptions" }, { value: "REGISTER", labelKey: "sipActionRegister" }],
         coapMethods: [{ value: "GET", labelKey: "coapMethodGet" }, { value: "POST", labelKey: "coapMethodPost" }],
         tlsAlpn: [{ value: "http/1.1", labelKey: "tlsAlpnHttp11" }, { value: "h2", labelKey: "tlsAlpnH2" }],
+        quicVersions: [{ value: "v1", labelKey: "quicVersionV1" }, { value: "v2", labelKey: "quicVersionV2" }],
+        quicAwgLevels: [
+            { value: "0", labelKey: "quicAwgLevel0" },
+            { value: "1", labelKey: "quicAwgLevel1" },
+            { value: "2", labelKey: "quicAwgLevel2" },
+            { value: "3", labelKey: "quicAwgLevel3" },
+            { value: "4", labelKey: "quicAwgLevel4" }
+        ],
         browserProfiles: [{ value: "chrome", labelKey: "browserChrome" }, { value: "firefox", labelKey: "browserFirefox" }, { value: "safari", labelKey: "browserSafari" }, { value: "edge", labelKey: "browserEdge" }],
         syslogFacilities: [{ value: "user", labelKey: "syslogFacilityUser" }, { value: "daemon", labelKey: "syslogFacilityDaemon" }, { value: "local0", labelKey: "syslogFacilityLocal0" }],
         syslogSeverities: [{ value: "info", labelKey: "syslogSeverityInfo" }, { value: "notice", labelKey: "syslogSeverityNotice" }, { value: "warning", labelKey: "syslogSeverityWarning" }]
@@ -53,11 +61,14 @@
         message: { type: "textarea", labelKey: "messageLabel", defaultValue: "payloadgen test", className: "field field-wide", rows: 3, spellcheck: false },
         clientId: { type: "text", labelKey: "clientIdLabel", spellcheck: false },
         tlsAlpn: { type: "select", labelKey: "alpnLabel", optionSet: "tlsAlpn", defaultValue: "h2" },
+        quicVersion: { type: "select", labelKey: "quicVersionLabel", optionSet: "quicVersions", defaultValue: "v1" },
+        quicAwgSegmented: { type: "checkbox", labelKey: "quicAwgSegmentedLabel", defaultValue: false },
+        quicAwgLevel: { type: "select", labelKey: "quicAwgLevelLabel", optionSet: "quicAwgLevels", defaultValue: "0" },
         browserProfile: { type: "select", labelKey: "browserLabel", optionSet: "browserProfiles", defaultValue: "chrome" },
         browserVersion: { type: "text", labelKey: "browserVersionLabel", placeholder: "auto", spellcheck: false },
         syslogFacility: { type: "select", labelKey: "facilityLabel", optionSet: "syslogFacilities", defaultValue: "user" },
         syslogSeverity: { type: "select", labelKey: "severityLabel", optionSet: "syslogSeverities", defaultValue: "info" },
-        quicEncrypt: { type: "checkbox", labelKey: "quicEncryptLabel", defaultValue: false }
+        quicEncrypt: { type: "checkbox", labelKey: "quicEncryptLabel", defaultValue: true }
     };
 
     var PROTOCOL_CATALOG = [
@@ -66,7 +77,7 @@
         { id: "ssdp", categoryId: "discovery", transport: "udp", port: 1900, rank: 3, labelKey: "protocolSsdp", descriptorKey: "descSsdp", fieldSet: [] },
         { id: "llmnr", categoryId: "discovery", transport: "udp", port: 5355, rank: 4, labelKey: "protocolLlmnr", descriptorKey: "descLlmnr", fieldSet: ["host"] },
         { id: "nbns", categoryId: "discovery", transport: "udp", port: 137, rank: 5, labelKey: "protocolNbns", descriptorKey: "descNbns", fieldSet: ["host"] },
-        { id: "quic", categoryId: "web", transport: "udp", port: 443, rank: 1, labelKey: "protocolQuic", descriptorKey: "descQuic", fieldSet: ["host", "browserProfile", "quicEncrypt"], defaults: { browserProfile: "chrome", quicEncrypt: false } },
+        { id: "quic", categoryId: "web", transport: "udp", port: 443, rank: 1, labelKey: "protocolQuic", descriptorKey: "descQuic", fieldSet: ["host", "browserProfile", "quicVersion", "quicEncrypt", "quicAwgSegmented", "quicAwgLevel"], defaults: { browserProfile: "chrome", quicVersion: "v1", quicEncrypt: true, quicAwgSegmented: false, quicAwgLevel: "0" } },
         { id: "tls_client_hello", categoryId: "web", transport: "tcp", port: 443, rank: 2, labelKey: "protocolTlsClientHello", descriptorKey: "descTlsClientHello", fieldSet: ["host", "browserProfile", "browserVersion", "tlsAlpn"], defaults: { tlsAlpn: "h2", browserProfile: "chrome" } },
         { id: "http2", categoryId: "web", transport: "tcp", port: 80, rank: 3, labelKey: "protocolHttp2", descriptorKey: "descHttp2", fieldSet: [] },
         { id: "http_browser", categoryId: "web", transport: "tcp", port: 80, rank: 4, labelKey: "protocolHttpBrowser", descriptorKey: "descHttpBrowser", fieldSet: ["host", "browserProfile", "browserVersion", "path", "randomQuery"], defaults: { path: "/", randomQuery: true, browserProfile: "chrome" } },
@@ -172,6 +183,9 @@
             messageLabel: "Message",
             clientIdLabel: "Client ID",
             alpnLabel: "ALPN",
+            quicVersionLabel: "QUIC Version",
+            quicAwgSegmentedLabel: "AWG Segmented",
+            quicAwgLevelLabel: "AWG Level",
             browserLabel: "Browser",
             browserVersionLabel: "Version",
             randomHostButton: "Random",
@@ -210,6 +224,13 @@
             coapMethodPost: "POST",
             tlsAlpnHttp11: "http/1.1",
             tlsAlpnH2: "h2",
+            quicVersionV1: "QUIC v1",
+            quicVersionV2: "QUIC v2",
+            quicAwgLevel0: "Level 0",
+            quicAwgLevel1: "Level 1",
+            quicAwgLevel2: "Level 2",
+            quicAwgLevel3: "Level 3",
+            quicAwgLevel4: "Level 4",
             browserChrome: "Chrome",
             browserFirefox: "Firefox",
             browserSafari: "Safari",
@@ -311,6 +332,9 @@
             messageLabel: "Сообщение",
             clientIdLabel: "Client ID",
             alpnLabel: "ALPN",
+            quicVersionLabel: "Версия QUIC",
+            quicAwgSegmentedLabel: "AWG-сегменты",
+            quicAwgLevelLabel: "Уровень AWG",
             browserLabel: "Браузер",
             browserVersionLabel: "Версия",
             randomHostButton: "Случайный",
@@ -349,6 +373,13 @@
             coapMethodPost: "POST",
             tlsAlpnHttp11: "http/1.1",
             tlsAlpnH2: "h2",
+            quicVersionV1: "QUIC v1",
+            quicVersionV2: "QUIC v2",
+            quicAwgLevel0: "Уровень 0",
+            quicAwgLevel1: "Уровень 1",
+            quicAwgLevel2: "Уровень 2",
+            quicAwgLevel3: "Уровень 3",
+            quicAwgLevel4: "Уровень 4",
             browserChrome: "Chrome",
             browserFirefox: "Firefox",
             browserSafari: "Safari",

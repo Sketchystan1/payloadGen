@@ -1,5 +1,5 @@
 const fs = require('fs');
-const { execSync } = require('child_process');
+const { execFileSync } = require('child_process');
 const data = require('./data.js');
 const generators = require('./generators.js');
 
@@ -49,11 +49,27 @@ let report = "";
 let successCount = 0;
 let totalCount = 0;
 
+function getWiresharkCommands() {
+    const isWSL = process.platform === 'linux' && fs.existsSync('/mnt/c/Windows');
+
+    if (isWSL) {
+        return {
+            text2pcap: '/mnt/c/Program Files/Wireshark/text2pcap.exe',
+            tshark: '/mnt/c/Program Files/Wireshark/tshark.exe'
+        };
+    }
+
+    return {
+        text2pcap: 'text2pcap',
+        tshark: 'tshark'
+    };
+}
+
 async function testProtocol(p) {
     totalCount++;
     console.log(`Testing ${p.id}...`);
     
-    let options = p.defaults || {};
+    let options = Object.assign({}, p.defaults || {});
     options.host = "test.local";
     options.path = "/";
     options.browserVersion = "100.0";
@@ -90,16 +106,20 @@ async function testProtocol(p) {
     
     const net = ports[p.id] || { proto: 'udp', port: 1234 };
     
-    const portArg = net.proto === 'tcp' ? `-T 1234,${net.port}` : `-u 1234,${net.port}`;
-    
-    // Detect if we're in WSL and need to use Windows executables
-    const isWSL = process.platform === 'linux' && fs.existsSync('/mnt/c/Windows');
-    const text2pcapCmd = isWSL ? '"/mnt/c/Program Files/Wireshark/text2pcap.exe"' : 'text2pcap';
-    const tsharkCmd = isWSL ? '"/mnt/c/Program Files/Wireshark/tshark.exe"' : 'tshark';
+    const portArgs = net.proto === 'tcp' ? ['-T', `1234,${net.port}`] : ['-u', `1234,${net.port}`];
+    const wireshark = getWiresharkCommands();
     
     try {
-        execSync(`${text2pcapCmd} ${portArg} temp_${p.id}.hex temp_${p.id}.pcap 2>&1`, { stdio: 'pipe', shell: '/bin/bash' });
-        const tsharkObj = execSync(`${tsharkCmd} -r temp_${p.id}.pcap -T fields -e _ws.col.Protocol -e _ws.col.Info 2>&1`, { stdio: 'pipe', shell: '/bin/bash' });
+        execFileSync(
+            wireshark.text2pcap,
+            portArgs.concat([`temp_${p.id}.hex`, `temp_${p.id}.pcap`]),
+            { stdio: 'pipe' }
+        );
+        const tsharkObj = execFileSync(
+            wireshark.tshark,
+            ['-r', `temp_${p.id}.pcap`, '-T', 'fields', '-e', '_ws.col.Protocol', '-e', '_ws.col.Info'],
+            { stdio: 'pipe' }
+        );
         const output = tsharkObj.toString().trim();
         
         // Check if protocol was detected correctly

@@ -628,9 +628,9 @@
 
         clearAllErrors();
 
-        // Check if any blocks use async protocols (like QUIC with encryption)
+        // Check if any blocks use async-only formatting or generation.
         getBlocks().forEach(function (block) {
-            if (block._state.protocolId === "quic" && collectProtocolOptions(block).quicEncrypt) {
+            if (block._state.protocolId === "quic" && shouldUseAsyncQuicOutput(collectProtocolOptions(block))) {
                 hasAsyncProtocols = true;
             }
         });
@@ -709,7 +709,13 @@
     }
 
     function appendBlockLines(lines, block, mtu, padMtu) {
-        var payloadBytes = generatePayload(block._state.protocolId, collectProtocolOptions(block));
+        var options = collectProtocolOptions(block);
+
+        if (block._state.protocolId === "quic" && options.quicAwgSegmented) {
+            throw new Error("AWG segmented QUIC output requires async generation.");
+        }
+
+        var payloadBytes = generatePayload(block._state.protocolId, options);
         var chunks = chunkPayload(payloadBytes, mtu, padMtu);
         var wasCapped = false;
         var index;
@@ -730,9 +736,37 @@
         var options = collectProtocolOptions(block);
         var payloadBytes;
 
+        if (block._state.protocolId === "quic" && options.quicAwgSegmented) {
+            if (lines.length >= CONFIG.maxOutputLines) {
+                return true;
+            }
+
+            if (typeof Generators.generateQuicAwgSignaturePartsAsync !== "function" &&
+                typeof Generators.generateQuicAwgSignatureAsync !== "function") {
+                throw new Error("AWG segmented QUIC output is not available in this build.");
+            }
+
+            var awgResult;
+
+            if (typeof Generators.generateQuicAwgSignaturePartsAsync === "function") {
+                awgResult = await Generators.generateQuicAwgSignaturePartsAsync(options);
+            } else {
+                awgResult = {
+                    expression: await Generators.generateQuicAwgSignatureAsync(options),
+                    packetLength: 0
+                };
+            }
+
+            lines.push(formatOutputExpressionLine(
+                lines.length + 1,
+                maybePadAwgExpression(awgResult.expression, awgResult.packetLength, mtu, padMtu)
+            ));
+            return false;
+        }
+
         // Use async generator for protocols that support it
         if (typeof Generators.generatePayloadAsync === "function" && 
-            (block._state.protocolId === "quic" && options.quicEncrypt)) {
+            (block._state.protocolId === "quic" && shouldUseAsyncQuicOutput(options))) {
             payloadBytes = await Generators.generatePayloadAsync(block._state.protocolId, options);
         } else {
             payloadBytes = generatePayload(block._state.protocolId, options);
@@ -1007,6 +1041,26 @@
 
     function formatOutputLine(lineNumber, bytes) {
         return "i" + lineNumber + "=<b 0x" + bytesToHex(bytes) + ">";
+    }
+
+    function formatOutputExpressionLine(lineNumber, expression) {
+        return "i" + lineNumber + "=" + String(expression || "");
+    }
+
+    function maybePadAwgExpression(expression, packetLength, mtu, padMtu) {
+        if (!padMtu || !Number.isFinite(packetLength) || packetLength <= 0 || packetLength >= mtu) {
+            return String(expression || "");
+        }
+
+        return String(expression || "") + "<b 0x" + repeatHexByte("00", mtu - packetLength) + ">";
+    }
+
+    function repeatHexByte(hexByte, count) {
+        return new Array(Math.max(0, count) + 1).join(String(hexByte || ""));
+    }
+
+    function shouldUseAsyncQuicOutput(options) {
+        return !!(options && (options.quicEncrypt || options.quicAwgSegmented));
     }
 
     function t(key) {

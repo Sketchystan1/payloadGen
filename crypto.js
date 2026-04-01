@@ -11,13 +11,37 @@
 }(typeof globalThis !== "undefined" ? globalThis : this, function (root) {
     "use strict";
 
-    // RFC 9001 - QUIC Initial Secrets
-    // Salt for QUIC v1 (version 0x00000001)
+    // RFC 9001 - QUIC v1 Initial salt
     var QUIC_V1_INITIAL_SALT = new Uint8Array([
         0x38, 0x76, 0x2c, 0xf7, 0xf5, 0x59, 0x34, 0xb3,
         0x4d, 0x17, 0x9a, 0xe6, 0xa4, 0xc8, 0x0c, 0xad,
         0xcc, 0xbb, 0x7f, 0x0a
     ]);
+    // RFC 9369 - QUIC v2 Initial salt
+    var QUIC_V2_INITIAL_SALT = new Uint8Array([
+        0x0d, 0xed, 0xe3, 0xde, 0xf7, 0x00, 0xa6, 0xdb,
+        0x81, 0x93, 0x81, 0xbe, 0x6e, 0x26, 0x9d, 0xcb,
+        0xf9, 0xbd, 0x2e, 0xd9
+    ]);
+    var EMPTY_BYTES = new Uint8Array(0);
+    var QUIC_VERSION_PARAMETERS = {
+        v1: {
+            initialSalt: QUIC_V1_INITIAL_SALT,
+            wireValue: 0x00000001,
+            initialHeaderBase: 0xC0,
+            keyLabel: "quic key",
+            ivLabel: "quic iv",
+            hpLabel: "quic hp"
+        },
+        v2: {
+            initialSalt: QUIC_V2_INITIAL_SALT,
+            wireValue: 0x6B3343CF,
+            initialHeaderBase: 0xD0,
+            keyLabel: "quicv2 key",
+            ivLabel: "quicv2 iv",
+            hpLabel: "quicv2 hp"
+        }
+    };
 
     function getCrypto() {
         if (root.crypto && root.crypto.subtle) {
@@ -41,13 +65,13 @@
         var crypto = getCrypto();
         var key = await crypto.subtle.importKey(
             "raw",
-            ikm,
+            salt,
             { name: "HMAC", hash: "SHA-256" },
             false,
             ["sign"]
         );
 
-        var prk = await crypto.subtle.sign("HMAC", key, salt);
+        var prk = await crypto.subtle.sign("HMAC", key, ikm);
         return new Uint8Array(prk);
     }
 
@@ -113,23 +137,28 @@
         return output;
     }
 
-    // Derive QUIC Initial secrets from Destination Connection ID
-    async function deriveInitialSecrets(dcid) {
-        // HKDF-Extract with QUIC v1 salt and DCID
-        var initialSecret = await hkdfExtract(QUIC_V1_INITIAL_SALT, dcid);
+    function getQuicVersionParameters(version) {
+        return QUIC_VERSION_PARAMETERS[version] || QUIC_VERSION_PARAMETERS.v1;
+    }
+
+    // Derive QUIC Initial secrets from Destination Connection ID.
+    // The salt is version-specific for QUIC v1/v2.
+    async function deriveInitialSecrets(dcid, version) {
+        var params = getQuicVersionParameters(version);
+        var initialSecret = await hkdfExtract(params.initialSalt, dcid);
 
         // Derive client and server initial secrets
         var clientInitialSecret = await hkdfExpandLabel(
             initialSecret,
             "client in",
-            new Uint8Array(0),
+            EMPTY_BYTES,
             32
         );
 
         var serverInitialSecret = await hkdfExpandLabel(
             initialSecret,
             "server in",
-            new Uint8Array(0),
+            EMPTY_BYTES,
             32
         );
 
@@ -139,11 +168,12 @@
         };
     }
 
-    // Derive packet protection keys from secret
-    async function derivePacketProtectionKeys(secret) {
-        var key = await hkdfExpandLabel(secret, "quic key", new Uint8Array(0), 16); // AES-128
-        var iv = await hkdfExpandLabel(secret, "quic iv", new Uint8Array(0), 12);   // 12 bytes for GCM
-        var hp = await hkdfExpandLabel(secret, "quic hp", new Uint8Array(0), 16);   // Header protection
+    // Derive packet protection keys from secret using version-specific labels.
+    async function derivePacketProtectionKeys(secret, version) {
+        var params = getQuicVersionParameters(version);
+        var key = await hkdfExpandLabel(secret, params.keyLabel, EMPTY_BYTES, 16); // AES-128
+        var iv = await hkdfExpandLabel(secret, params.ivLabel, EMPTY_BYTES, 12);   // 12 bytes for GCM
+        var hp = await hkdfExpandLabel(secret, params.hpLabel, EMPTY_BYTES, 16);   // Header protection
 
         return { key: key, iv: iv, hp: hp };
     }
@@ -173,27 +203,22 @@
         return new Uint8Array(ciphertext);
     }
 
-    // AES-ECB for header protection (used in QUIC)
+    // WebCrypto does not expose ECB directly. For a single block, CBC with a zero IV
+    // produces the same block-cipher output as ECB and works for QUIC header protection.
     async function aesEcbEncrypt(key, plaintext) {
         var crypto = getCrypto();
-        
-        // WebCrypto doesn't support ECB directly, so we use CTR with zero counter
-        // For header protection, we only need one block
         var cryptoKey = await crypto.subtle.importKey(
             "raw",
             key,
-            { name: "AES-CTR" },
+            { name: "AES-CBC" },
             false,
             ["encrypt"]
         );
 
-        // Use a zero counter for ECB-like behavior on a single block
-        var counter = new Uint8Array(16);
         var ciphertext = await crypto.subtle.encrypt(
             {
-                name: "AES-CTR",
-                counter: counter,
-                length: 128
+                name: "AES-CBC",
+                iv: new Uint8Array(16)
             },
             cryptoKey,
             plaintext
@@ -237,10 +262,10 @@
     }
 
     // Encrypt QUIC Initial packet payload
-    async function encryptQuicInitialPayload(dcid, packetNumber, payload) {
+    async function encryptQuicInitialPayload(dcid, packetNumber, payload, version) {
         // Derive initial secrets
-        var secrets = await deriveInitialSecrets(dcid);
-        var keys = await derivePacketProtectionKeys(secrets.client);
+        var secrets = await deriveInitialSecrets(dcid, version);
+        var keys = await derivePacketProtectionKeys(secrets.client, version);
 
         // Construct nonce
         var nonce = constructNonce(keys.iv, packetNumber);
@@ -260,10 +285,11 @@
     }
 
     // Full QUIC Initial packet encryption with header protection
-    async function encryptQuicInitialPacket(dcid, scid, packetNumber, payload) {
+    async function encryptQuicInitialPacket(dcid, scid, packetNumber, payload, version) {
+        var params = getQuicVersionParameters(version);
         // Derive initial secrets and keys
-        var secrets = await deriveInitialSecrets(dcid);
-        var keys = await derivePacketProtectionKeys(secrets.client);
+        var secrets = await deriveInitialSecrets(dcid, version);
+        var keys = await derivePacketProtectionKeys(secrets.client, version);
 
         // Construct nonce
         var nonce = constructNonce(keys.iv, packetNumber);
@@ -272,14 +298,14 @@
         var header = new Uint8Array(1 + 4 + 1 + dcid.length + 1 + scid.length);
         var offset = 0;
         
-        // First byte: Long header, Initial packet (0xC0 | 0x00)
-        header[offset++] = 0xC0;
+        // First byte: Long header, Initial packet
+        header[offset++] = params.initialHeaderBase | ((packetNumber.length - 1) & 0x03);
         
-        // Version (4 bytes) - QUIC v1
-        header[offset++] = 0x00;
-        header[offset++] = 0x00;
-        header[offset++] = 0x00;
-        header[offset++] = 0x01;
+        // Version (4 bytes)
+        header[offset++] = (params.wireValue >>> 24) & 0xFF;
+        header[offset++] = (params.wireValue >>> 16) & 0xFF;
+        header[offset++] = (params.wireValue >>> 8) & 0xFF;
+        header[offset++] = params.wireValue & 0xFF;
         
         // DCID length + DCID
         header[offset++] = dcid.length;

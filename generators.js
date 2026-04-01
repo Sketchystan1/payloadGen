@@ -23,6 +23,10 @@
     var CURL_USER_AGENTS = Data.CURL_USER_AGENTS;
     var SSDP_SEARCH_TARGETS = Data.SSDP_SEARCH_TARGETS;
     var LATEST_QUIC_VERSION = Data.LATEST_QUIC_VERSION;
+    var QUIC_VERSION_DEFS = {
+        v1: { value: "v1", wireValue: 0x00000001, initialHeaderBase: 0xC0 },
+        v2: { value: "v2", wireValue: 0x6B3343CF, initialHeaderBase: 0xD0 }
+    };
     var textEncoder = createTextEncoder();
     var hasCrypto = !!Crypto;
 
@@ -92,28 +96,31 @@
         return encodeText(ssdpMessage);
     }
 
-    // Synchronous QUIC payload (backward compatible, uses random masking)
-    function generateQuicPayload(options) {
-        var version = { value: "latest", wireValue: LATEST_QUIC_VERSION };
-        var dcid = randomBytes(8);
-        var scid = randomBytes(8);
-        var packetNumber = randomBytes(4);
-        var clientHello = buildClientHelloBody(options.host, {
+    function buildQuicClientHello(host, options, scid) {
+        return buildClientHelloBody(host, {
             legacyVersion: 0x0303,
             withTls13: true,
-            alpnProtocol: "h3"
+            alpnProtocol: "h3",
+            browserProfile: options.browserProfile,
+            withQuicTransportParameters: true,
+            quicSourceConnectionId: scid
         });
-        var cryptoBody = options.quicEncrypt ? maskQuicCryptoBody(clientHello) : clientHello;
-        var cryptoFrame = concatBytes(
-            Uint8Array.from([0x06]),
-            encodeQuicVarInt(0),
-            encodeQuicVarInt(cryptoBody.length),
-            cryptoBody
-        );
-        var packetLength = packetNumber.length + cryptoFrame.length;
+    }
 
+    function buildQuicCryptoFrame(data, offset) {
+        var frameOffset = Number.isFinite(offset) ? offset : 0;
         return concatBytes(
-            Uint8Array.from([0xD3]),
+            Uint8Array.from([0x06]),
+            encodeQuicVarInt(frameOffset),
+            encodeQuicVarInt(data.length),
+            data
+        );
+    }
+
+    function buildPlainQuicInitialPacket(version, dcid, scid, packetNumber, payload) {
+        var packetLength = packetNumber.length + payload.length;
+        return concatBytes(
+            Uint8Array.from([getQuicInitialFirstByte(version, packetNumber.length)]),
             u32(version.wireValue),
             Uint8Array.from([dcid.length]),
             dcid,
@@ -122,157 +129,214 @@
             encodeQuicVarInt(0),
             encodeQuicVarInt(packetLength),
             packetNumber,
-            cryptoFrame
+            payload
         );
     }
 
-    // Async QUIC payload with proper RFC 9001 encryption
+    async function buildProtectedQuicInitialPacket(version, dcid, scid, packetNumber, payload) {
+        var secrets = await Crypto.deriveInitialSecrets(dcid, version.value);
+        var keys = await Crypto.derivePacketProtectionKeys(secrets.client, version.value);
+        var firstByte = getQuicInitialFirstByte(version, packetNumber.length);
+        var packetLength = packetNumber.length + payload.length + 16;
+        var headerForAad = concatBytes(
+            Uint8Array.from([firstByte]),
+            u32(version.wireValue),
+            Uint8Array.from([dcid.length]),
+            dcid,
+            Uint8Array.from([scid.length]),
+            scid,
+            encodeQuicVarInt(0),
+            encodeQuicVarInt(packetLength),
+            packetNumber
+        );
+        var nonce = Crypto.constructNonce(keys.iv, packetNumber);
+        var encrypted = await Crypto.aesGcmEncrypt(keys.key, nonce, payload, headerForAad);
+        var sampleOffset = 4 - packetNumber.length;
+
+        if (sampleOffset >= 0 && encrypted.length >= sampleOffset + 16) {
+            var sample = encrypted.subarray(sampleOffset, sampleOffset + 16);
+            var headerProtection = await Crypto.applyHeaderProtection(keys.hp, sample, firstByte, packetNumber);
+            var protectedHeader = new Uint8Array(headerForAad);
+            protectedHeader[0] = headerProtection.firstByte;
+            protectedHeader.set(headerProtection.packetNumber, protectedHeader.length - packetNumber.length);
+
+            return concatBytes(protectedHeader, encrypted);
+        }
+
+        return concatBytes(headerForAad, encrypted);
+    }
+
+    function buildQuicAwgPayload(clientHello, level) {
+        var cutLevel = parseInt(level, 10);
+        var payload;
+        var cutSettings;
+        var clientHelloBytes = clientHello instanceof Uint8Array ? clientHello : new Uint8Array(clientHello);
+
+        if (!cutLevel) {
+            payload = buildQuicCryptoFrame(clientHelloBytes, 0);
+            var dataOffset = payload.length - clientHelloBytes.length;
+            cutSettings = [dataOffset + 6, 32, clientHelloBytes.length - 38, 16];
+        } else {
+            var cutPresets = {
+                1: [38, Infinity, 0, 38, 32, false],
+                2: [38, Infinity, 0, 38, 37, false],
+                3: [0, 1, 38, Infinity, 0, false],
+                4: [0, 1, 38, Infinity, 0, true]
+            };
+            var cutPreset = cutPresets[cutLevel] || cutPresets[1];
+            var p1s = cutPreset[0];
+            var p1e = cutPreset[1];
+            var p2s = cutPreset[2];
+            var p2e = cutPreset[3];
+            var dropTail = cutPreset[4];
+            var skipZeroes = cutPreset[5];
+
+            if (skipZeroes) {
+                while (p2s < clientHelloBytes.length && clientHelloBytes[p2s] === 0) {
+                    p2s += 1;
+                }
+            }
+
+            payload = concatBytes(
+                buildQuicCryptoFrame(sliceBytes(clientHelloBytes, p1s, p1e), p1s),
+                buildQuicCryptoFrame(sliceBytes(clientHelloBytes, p2s, p2e), p2s)
+            );
+            cutSettings = [payload.length - dropTail, 16 + dropTail];
+        }
+
+        return {
+            payload: payload,
+            cutSettings: cutSettings
+        };
+    }
+
+    function fixQuicAwgCutSettings(cutSettings, packetLength, packetNumberLength, payloadLength) {
+        if (cutSettings[0] < 20 - packetNumberLength) {
+            var toAdd = 20 - packetNumberLength - cutSettings[0];
+            cutSettings[0] += toAdd;
+            cutSettings[1] -= toAdd;
+        }
+
+        cutSettings[0] += packetLength - payloadLength - 16;
+    }
+
+    function formatQuicAwg(buffer, parts, includeFirst) {
+        var include = includeFirst !== false;
+        var offset = 0;
+        var index;
+        var result = "";
+
+        if (!parts || !parts.length) {
+            return "<b 0x" + bytesToHex(buffer) + ">";
+        }
+
+        for (index = 0; index < parts.length; index += 1) {
+            var part = parts[index];
+
+            if (part > 0) {
+                if (include) {
+                    result += "<b 0x" + bytesToHex(sliceBytes(buffer, offset, offset + part)) + ">";
+                } else {
+                    result += "<r " + part + ">";
+                }
+
+                offset += part;
+            }
+
+            include = !include;
+        }
+
+        return result;
+    }
+
+    function sliceBytes(bytes, start, end) {
+        return bytes.slice(start, end === Infinity ? bytes.length : end);
+    }
+
+    // Synchronous QUIC payload (backward compatible, uses random masking)
+    function generateQuicPayload(options) {
+        var version = resolveQuicVersion(options.quicVersion);
+        var dcid = randomBytes(8);
+        var scid = randomBytes(8);
+        var packetNumber = randomBytes(4);
+        var clientHello = buildQuicClientHello(options.host, options, scid);
+        var cryptoBody = options.quicEncrypt ? maskQuicCryptoBody(clientHello) : clientHello;
+        var cryptoFrame = buildQuicCryptoFrame(cryptoBody, 0);
+
+        return buildPlainQuicInitialPacket(version, dcid, scid, packetNumber, cryptoFrame);
+    }
+
+    // Async QUIC payload with proper QUIC Initial encryption.
+    // RFC 9001 applies to QUIC v1; RFC 9369 adjusts the v2 wire version,
+    // Initial salt, HKDF labels, and long-header packet type bits.
     async function generateQuicPayloadAsync(options) {
         if (!hasCrypto) {
-            // Fallback to sync version if crypto module not available
             return generateQuicPayload(options);
         }
 
-        var version = { value: "latest", wireValue: LATEST_QUIC_VERSION };
+        var version = resolveQuicVersion(options.quicVersion);
         var dcid = randomBytes(8);
         var scid = randomBytes(8);
-        
-        // RFC 9001: Packet number should be derived properly, but for Initial we can use random
-        // In real implementation, PKN starts from 0 or random value
         var packetNumber = randomBytes(4);
-        
-        var clientHello = buildClientHelloBody(options.host, {
-            legacyVersion: 0x0303,
-            withTls13: true,
-            alpnProtocol: "h3"
-        });
+        var clientHello = buildQuicClientHello(options.host, options, scid);
+        var cryptoFrame = buildQuicCryptoFrame(clientHello, 0);
+        var payload = cryptoFrame;
 
         if (!options.quicEncrypt) {
-            // No encryption requested, use plaintext
-            var cryptoFrame = concatBytes(
-                Uint8Array.from([0x06]),
-                encodeQuicVarInt(0),
-                encodeQuicVarInt(clientHello.length),
-                clientHello
-            );
-            var packetLength = packetNumber.length + cryptoFrame.length;
-
-            return concatBytes(
-                Uint8Array.from([0xD3]),
-                u32(version.wireValue),
-                Uint8Array.from([dcid.length]),
-                dcid,
-                Uint8Array.from([scid.length]),
-                scid,
-                encodeQuicVarInt(0),
-                encodeQuicVarInt(packetLength),
-                packetNumber,
-                cryptoFrame
-            );
+            return buildPlainQuicInitialPacket(version, dcid, scid, packetNumber, cryptoFrame);
         }
 
-        // RFC 9001: Proper QUIC Initial packet encryption sequence:
-        // 1. Derive keys from well-known salt and DCID
-        // 2. Build payload (CRYPTO frame) and add padding BEFORE encryption
-        // 3. XOR IV with PKN to create nonce
-        // 4. Encrypt payload with AAD (unprotected header)
-        // 5. Take sample from encrypted payload and derive header protection mask
-        // 6. XOR first byte lower bits and PKN with the mask
         try {
-            // Step 1: Derive initial secrets and keys from DCID
-            var secrets = await Crypto.deriveInitialSecrets(dcid);
-            var keys = await Crypto.derivePacketProtectionKeys(secrets.client);
-            
-            // Step 2: Build CRYPTO frame with ClientHello
-            var cryptoFrame = concatBytes(
-                Uint8Array.from([0x06]),  // Frame type: CRYPTO
-                encodeQuicVarInt(0),       // Offset: 0
-                encodeQuicVarInt(clientHello.length),
-                clientHello
-            );
-
-            // Step 2a: Add padding to reach MTU BEFORE encryption (RFC 9001 Section 14.1)
-            // Initial packets should be at least 1200 bytes to avoid amplification attacks
-            var headerSize = 1 + 4 + 1 + dcid.length + 1 + scid.length + 1 + 2 + packetNumber.length + 16; // +16 for GCM tag
+            var headerSize = 1 + 4 + 1 + dcid.length + 1 + scid.length + 1 + 2 + packetNumber.length + 16;
             var targetSize = 1200;
             var currentPayloadSize = cryptoFrame.length;
             var paddingNeeded = Math.max(0, targetSize - headerSize - currentPayloadSize);
-            
-            var payload;
+
             if (paddingNeeded > 0) {
-                // Add PADDING frame (0x00 bytes)
-                var paddingFrame = new Uint8Array(paddingNeeded);
-                payload = concatBytes(cryptoFrame, paddingFrame);
-            } else {
-                payload = cryptoFrame;
+                payload = concatBytes(cryptoFrame, new Uint8Array(paddingNeeded));
             }
 
-            // Step 3: Construct nonce by XORing IV with packet number
-            var nonce = Crypto.constructNonce(keys.iv, packetNumber);
-
-            // Build unprotected header for AAD (Additional Authenticated Data)
-            var headerForAad = concatBytes(
-                Uint8Array.from([0xC3]), // Long header, Initial, 4-byte PN (0xC0 | 0x03)
-                u32(version.wireValue),
-                Uint8Array.from([dcid.length]),
-                dcid,
-                Uint8Array.from([scid.length]),
-                scid,
-                encodeQuicVarInt(0) // Token length (0 for client Initial)
-            );
-
-            // Step 4: Encrypt the payload with AES-128-GCM
-            var encrypted = await Crypto.aesGcmEncrypt(keys.key, nonce, payload, headerForAad);
-
-            // Calculate packet length (PN + encrypted payload with GCM tag)
-            var packetLength = packetNumber.length + encrypted.length;
-
-            // Step 5 & 6: Apply header protection
-            if (encrypted.length >= 20) {
-                // Sample is 16 bytes starting 4 bytes after the start of packet number
-                // Since we haven't added PN yet, sample starts at byte 4 of encrypted data
-                var sample = encrypted.subarray(4, 20);
-                var headerProtection = await Crypto.applyHeaderProtection(keys.hp, sample, 0xC3, packetNumber);
-
-                return concatBytes(
-                    Uint8Array.from([headerProtection.firstByte]),
-                    u32(version.wireValue),
-                    Uint8Array.from([dcid.length]),
-                    dcid,
-                    Uint8Array.from([scid.length]),
-                    scid,
-                    encodeQuicVarInt(0),
-                    encodeQuicVarInt(packetLength),
-                    headerProtection.packetNumber,
-                    encrypted
-                );
-            } else {
-                // Not enough data for header protection, return without it
-                return concatBytes(
-                    Uint8Array.from([0xC3]),
-                    u32(version.wireValue),
-                    Uint8Array.from([dcid.length]),
-                    dcid,
-                    Uint8Array.from([scid.length]),
-                    scid,
-                    encodeQuicVarInt(0),
-                    encodeQuicVarInt(packetLength),
-                    packetNumber,
-                    encrypted
-                );
-            }
+            return await buildProtectedQuicInitialPacket(version, dcid, scid, packetNumber, payload);
         } catch (error) {
             console.warn("QUIC encryption failed, falling back to masking:", error);
-            // Fallback to random masking if encryption fails
             return generateQuicPayload(options);
         }
+    }
+
+    async function generateQuicAwgSignaturePartsAsync(options) {
+        if (!hasCrypto) {
+            throw new Error("AWG segmented QUIC output requires WebCrypto support.");
+        }
+
+        var version = resolveQuicVersion(options.quicVersion);
+        var dcid = randomBytes(8);
+        var scid = randomBytes(8);
+        var packetNumber = randomBytes(4);
+        var clientHello = buildQuicClientHello(options.host, options, scid);
+        var awgPayload = buildQuicAwgPayload(clientHello, options.quicAwgLevel);
+        var packetBytes = await buildProtectedQuicInitialPacket(version, dcid, scid, packetNumber, awgPayload.payload);
+        var cutSettings = awgPayload.cutSettings.slice();
+
+        fixQuicAwgCutSettings(cutSettings, packetBytes.length, packetNumber.length, awgPayload.payload.length);
+
+        return {
+            expression: formatQuicAwg(packetBytes, cutSettings, true),
+            packetLength: packetBytes.length
+        };
+    }
+
+    async function generateQuicAwgSignatureAsync(options) {
+        var parts = await generateQuicAwgSignaturePartsAsync(options);
+        return parts.expression;
     }
 
     function generateTlsClientHelloPayload(options) {
         var handshake = buildClientHelloBody(options.host, {
             legacyVersion: 0x0303,
             withTls13: true,
-            alpnProtocol: options.tlsAlpn
+            alpnProtocol: options.tlsAlpn,
+            browserProfile: options.browserProfile,
+            withQuicTransportParameters: false
         });
 
         return concatBytes(
@@ -627,36 +691,45 @@
     }
 
     function buildClientHelloBody(host, options) {
+        var greaseValue = selectGreaseValue();
+        var secondaryGreaseValue = selectGreaseValue(greaseValue);
+        var isQuic = !!options.withQuicTransportParameters;
         var sessionId = randomBytes(32);
-        var extensions = buildTlsExtensions(host, !!options.withTls13, options.alpnProtocol);
-        
-        // Expanded cipher suites to match real browsers (15 suites like Chrome)
-        var cipherSuites = concatBytes(
-            // TLS 1.3 cipher suites (required)
-            u16(0x1301),  // TLS_AES_128_GCM_SHA256
-            u16(0x1302),  // TLS_AES_256_GCM_SHA384
-            u16(0x1303),  // TLS_CHACHA20_POLY1305_SHA256
-            
-            // ECDHE with ECDSA (common in modern browsers)
-            u16(0xC02B),  // TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256
-            u16(0xC02C),  // TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384
-            u16(0xCCA9),  // TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256
-            
-            // ECDHE with RSA (widely supported)
-            u16(0xC02F),  // TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256
-            u16(0xC030),  // TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
-            u16(0xCCA8),  // TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256
-            
-            // Legacy ECDHE (for compatibility)
-            u16(0xC013),  // TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA
-            u16(0xC014),  // TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA
-            
-            // RSA (legacy but still common)
-            u16(0x009C),  // TLS_RSA_WITH_AES_128_GCM_SHA256
-            u16(0x009D),  // TLS_RSA_WITH_AES_256_GCM_SHA384
-            u16(0x002F),  // TLS_RSA_WITH_AES_128_CBC_SHA
-            u16(0x0035)   // TLS_RSA_WITH_AES_256_CBC_SHA
-        );
+        var extensions = buildTlsExtensions(host, {
+            withTls13: !!options.withTls13,
+            alpnProtocol: options.alpnProtocol,
+            greaseValue: greaseValue,
+            secondaryGreaseValue: secondaryGreaseValue,
+            isQuic: isQuic,
+            withQuicTransportParameters: !!options.withQuicTransportParameters,
+            quicSourceConnectionId: options.quicSourceConnectionId || zeroBytes(0)
+        });
+
+        var cipherSuites = isQuic
+            ? concatBytes(
+                u16(greaseValue),
+                u16(0x1301),
+                u16(0x1302),
+                u16(0x1303)
+            )
+            : concatBytes(
+                u16(greaseValue),
+                u16(0x1301),
+                u16(0x1302),
+                u16(0x1303),
+                u16(0xC02B),
+                u16(0xC02F),
+                u16(0xC02C),
+                u16(0xC030),
+                u16(0xCCA9),
+                u16(0xCCA8),
+                u16(0xC013),
+                u16(0xC014),
+                u16(0x009C),
+                u16(0x009D),
+                u16(0x002F),
+                u16(0x0035)
+            );
         
         var body = concatBytes(
             u16(options.legacyVersion),
@@ -706,37 +779,56 @@
         );
     }
 
-    function buildTlsExtensions(host, withTls13, alpnProtocol) {
-        // Extension order matters for fingerprinting!
-        // This order mimics Chrome/modern browsers
-        var parts = [
-            buildServerNameExtension(host),                    // 0 - server_name
-            buildExtendedMasterSecretExtension(),              // 23 - extended_master_secret
-            buildRenegotiationInfoExtension(),                 // 65281 - renegotiation_info
-            buildSupportedGroupsExtension(),                   // 10 - supported_groups
-            buildEcPointFormatsExtension(),                    // 11 - ec_point_formats
-            buildSessionTicketExtension(),                     // 35 - session_ticket
-            buildStatusRequestExtension(),                     // 5 - status_request (OCSP)
-            buildSignatureAlgorithmsExtension(),               // 13 - signature_algorithms
-            buildSignedCertificateTimestampExtension(),        // 18 - signed_certificate_timestamp
-            buildKeyShareExtension(),                          // 51 - key_share
-            buildPskModesExtension()                           // 45 - psk_key_exchange_modes
-        ];
+    function buildTlsExtensions(host, options) {
+        // Extension order matters for fingerprinting. Use a browser-like TCP layout
+        // and a separate leaner QUIC layout so the ClientHello matches its transport.
+        var greaseValue = options.greaseValue;
+        var isQuic = !!options.isQuic;
+        var parts = isQuic
+            ? [
+                buildGreaseExtension(greaseValue),
+                buildServerNameExtension(host),
+                buildSupportedGroupsExtension(greaseValue),
+                buildStatusRequestExtension(),
+                buildSignatureAlgorithmsExtension(),
+                buildSignedCertificateTimestampExtension(),
+                buildKeyShareExtension(greaseValue),
+                buildPskModesExtension()
+            ]
+            : [
+                buildGreaseExtension(greaseValue),
+                buildServerNameExtension(host),
+                buildExtendedMasterSecretExtension(),
+                buildRenegotiationInfoExtension(),
+                buildSupportedGroupsExtension(greaseValue),
+                buildEcPointFormatsExtension(),
+                buildSessionTicketExtension(),
+                buildStatusRequestExtension(),
+                buildSignatureAlgorithmsExtension(),
+                buildSignedCertificateTimestampExtension(),
+                buildKeyShareExtension(greaseValue),
+                buildPskModesExtension()
+            ];
 
-        // Insert ALPN if specified (position 6, after session_ticket)
-        if (alpnProtocol) {
-            parts.splice(6, 0, buildAlpnExtension(alpnProtocol));  // 16 - application_layer_protocol_negotiation
+        if (options.alpnProtocol) {
+            parts.splice(isQuic ? 3 : 7, 0, buildAlpnExtension(resolveAlpnProtocols(options.alpnProtocol, isQuic)));
         }
 
-        // Add TLS 1.3 specific extensions
-        if (withTls13) {
-            // Insert supported_versions before key_share
-            var keyShareIndex = parts.length - 2;
-            parts.splice(keyShareIndex, 0, buildSupportedVersionsExtension());  // 43 - supported_versions
-            
-            // Add compress_certificate after psk_modes
-            parts.push(buildCompressCertificateExtension());   // 27 - compress_certificate
+        if (options.withQuicTransportParameters) {
+            parts.push(buildQuicTransportParametersExtension(options.quicSourceConnectionId));
         }
+
+        if (options.withTls13) {
+            var keyShareIndex = findExtensionInsertIndex(parts, 0x0033);
+            parts.splice(keyShareIndex, 0, buildSupportedVersionsExtension(greaseValue, isQuic));
+            parts.push(buildCompressCertificateExtension());
+        }
+
+        if (!isQuic && options.alpnProtocol === "h2") {
+            parts.push(buildApplicationSettingsExtension(["h2"]));
+        }
+
+        parts.push(buildGreaseExtension(options.secondaryGreaseValue));
 
         // Calculate total length for padding
         var currentLength = 0;
@@ -764,30 +856,45 @@
         return concatBytes(u16(0x0000), u16(data.length), data);
     }
 
-    function buildAlpnExtension(protocol) {
-        var protocolBytes = encodeText(protocol);
-        var entry = concatBytes(Uint8Array.from([protocolBytes.length]), protocolBytes);
-        var data = concatBytes(u16(entry.length), entry);
+    function buildAlpnExtension(protocols) {
+        var entries = concatBytes.apply(null, protocols.map(function (protocol) {
+            var protocolBytes = encodeText(protocol);
+            return concatBytes(Uint8Array.from([protocolBytes.length]), protocolBytes);
+        }));
+        var data = concatBytes(u16(entries.length), entries);
         return concatBytes(u16(0x0010), u16(data.length), data);
     }
 
-    function buildSupportedVersionsExtension() {
-        return concatBytes(u16(0x002B), u16(5), Uint8Array.from([0x04, 0x03, 0x04, 0x03, 0x03]));
+    function buildSupportedVersionsExtension(greaseValue, isQuic) {
+        var versions = concatBytes(
+            u16(greaseValue),
+            u16(0x0304),
+            isQuic ? zeroBytes(0) : u16(0x0303)
+        );
+        if (isQuic) {
+            versions = concatBytes(u16(greaseValue), u16(0x0304));
+        }
+        return concatBytes(u16(0x002B), u16(versions.length + 1), Uint8Array.from([versions.length]), versions);
     }
 
-    function buildSupportedGroupsExtension() {
-        // Expanded to match Chrome/Firefox (4 curves)
-        var groups = concatBytes(
+    function buildSupportedGroupsExtension(greaseValue) {
+        var parts = [];
+
+        if (Number.isFinite(greaseValue)) {
+            parts.push(u16(greaseValue));
+        }
+
+        parts.push(
             u16(0x001D),  // x25519 (most preferred)
             u16(0x0017),  // secp256r1 (P-256)
-            u16(0x0018),  // secp384r1 (P-384)
-            u16(0x0019)   // secp521r1 (P-521)
+            u16(0x0018)   // secp384r1 (P-384)
         );
+
+        var groups = concatBytes.apply(null, parts);
         return concatBytes(u16(0x000A), u16(groups.length + 2), u16(groups.length), groups);
     }
 
     function buildSignatureAlgorithmsExtension() {
-        // Expanded to match Chrome (8 algorithms)
         var algorithms = concatBytes(
             u16(0x0403),  // ecdsa_secp256r1_sha256
             u16(0x0804),  // rsa_pss_rsae_sha256
@@ -796,7 +903,8 @@
             u16(0x0805),  // rsa_pss_rsae_sha384
             u16(0x0501),  // rsa_pkcs1_sha384
             u16(0x0806),  // rsa_pss_rsae_sha512
-            u16(0x0601)   // rsa_pkcs1_sha512
+            u16(0x0601),  // rsa_pkcs1_sha512
+            u16(0x0807)   // ed25519
         );
         return concatBytes(u16(0x000D), u16(algorithms.length + 2), u16(algorithms.length), algorithms);
     }
@@ -809,10 +917,17 @@
         return concatBytes(u16(0x002D), u16(2), Uint8Array.from([0x01, 0x01]));
     }
 
-    function buildKeyShareExtension() {
+    function buildKeyShareExtension(greaseValue) {
         var keyBytes = randomBytes(32);
-        var entry = concatBytes(u16(0x001D), u16(keyBytes.length), keyBytes);
-        return concatBytes(u16(0x0033), u16(entry.length + 2), u16(entry.length), entry);
+        var entries = concatBytes(
+            u16(greaseValue),
+            u16(1),
+            Uint8Array.from([0x00]),
+            u16(0x001D),
+            u16(keyBytes.length),
+            keyBytes
+        );
+        return concatBytes(u16(0x0033), u16(entries.length + 2), u16(entries.length), entries);
     }
 
     // Additional extensions for better browser mimicry
@@ -855,6 +970,41 @@
         return concatBytes(u16(0x001B), u16(algorithms.length), algorithms);
     }
 
+    function buildApplicationSettingsExtension(protocols) {
+        var entries = concatBytes.apply(null, protocols.map(function (protocol) {
+            var protocolBytes = encodeText(protocol);
+            return concatBytes(Uint8Array.from([protocolBytes.length]), protocolBytes);
+        }));
+        return concatBytes(u16(0x4469), u16(entries.length + 2), u16(entries.length), entries);
+    }
+
+    function buildQuicTransportParametersExtension(sourceConnectionId) {
+        var parameters = concatBytes(
+            encodeTransportParameter(0x01, encodeQuicVarInt(30000)),
+            encodeTransportParameter(0x03, encodeQuicVarInt(1472)),
+            encodeTransportParameter(0x04, encodeQuicVarInt(15728640)),
+            encodeTransportParameter(0x05, encodeQuicVarInt(6291456)),
+            encodeTransportParameter(0x06, encodeQuicVarInt(6291456)),
+            encodeTransportParameter(0x07, encodeQuicVarInt(6291456)),
+            encodeTransportParameter(0x08, encodeQuicVarInt(100)),
+            encodeTransportParameter(0x09, encodeQuicVarInt(100)),
+            encodeTransportParameter(0x0a, encodeQuicVarInt(3)),
+            encodeTransportParameter(0x0b, encodeQuicVarInt(25)),
+            encodeTransportParameter(0x0c, zeroBytes(0)),
+            encodeTransportParameter(0x0e, encodeQuicVarInt(8)),
+            encodeTransportParameter(0x0f, sourceConnectionId)
+        );
+        return concatBytes(u16(0x0039), u16(parameters.length), parameters);
+    }
+
+    function encodeTransportParameter(id, valueBytes) {
+        return concatBytes(
+            encodeQuicVarInt(id),
+            encodeQuicVarInt(valueBytes.length),
+            valueBytes
+        );
+    }
+
     function buildPaddingExtension(paddingLength) {
         // Extension 21 - Padding
         if (paddingLength <= 0) {
@@ -862,6 +1012,49 @@
         }
         var padding = new Uint8Array(paddingLength);
         return concatBytes(u16(0x0015), u16(paddingLength), padding);
+    }
+
+    function buildGreaseExtension(greaseValue) {
+        return concatBytes(u16(greaseValue), u16(0));
+    }
+
+    function selectGreaseValue(excluded) {
+        var values = [
+            0x0A0A, 0x1A1A, 0x2A2A, 0x3A3A,
+            0x4A4A, 0x5A5A, 0x6A6A, 0x7A7A,
+            0x8A8A, 0x9A9A, 0xAAAA, 0xBABA,
+            0xCACA, 0xDADA, 0xEAEA, 0xFAFA
+        ];
+        var filtered = values.filter(function (value) {
+            return value !== excluded;
+        });
+        return randomItem(filtered.length ? filtered : values);
+    }
+
+    function findExtensionInsertIndex(parts, extensionType) {
+        var marker = u16(extensionType);
+        var index;
+
+        for (index = 0; index < parts.length; index += 1) {
+            var part = parts[index];
+            if (part.length >= 2 && part[0] === marker[0] && part[1] === marker[1]) {
+                return index;
+            }
+        }
+
+        return parts.length;
+    }
+
+    function resolveAlpnProtocols(protocol, isQuic) {
+        if (isQuic) {
+            return [protocol];
+        }
+
+        if (protocol === "h2") {
+            return ["h2", "http/1.1"];
+        }
+
+        return [protocol];
     }
 
     function buildCoapOptions(host, path) {
@@ -905,8 +1098,22 @@
         return { nibble: 14, extBytes: u16(value - 269) };
     }
 
-    function resolveQuicVersion() {
-        return { value: "latest", wireValue: LATEST_QUIC_VERSION };
+    function resolveQuicVersion(value) {
+        var normalized = String(value == null ? "" : value).trim().toLowerCase();
+
+        if (!normalized || normalized === "latest" || normalized === "default") {
+            normalized = LATEST_QUIC_VERSION === QUIC_VERSION_DEFS.v2.wireValue ? "v2" : "v1";
+        } else if (normalized === "1" || normalized === "0x00000001") {
+            normalized = "v1";
+        } else if (normalized === "2" || normalized === "0x6b3343cf") {
+            normalized = "v2";
+        }
+
+        return QUIC_VERSION_DEFS[normalized] || QUIC_VERSION_DEFS.v1;
+    }
+
+    function getQuicInitialFirstByte(version, packetNumberLength) {
+        return version.initialHeaderBase | ((packetNumberLength - 1) & 0x03);
     }
 
     function normalizeHost(rawValue) {
@@ -1495,6 +1702,8 @@
     return {
         generatePayload: generatePayload,
         generatePayloadAsync: generatePayloadAsync,
+        generateQuicAwgSignaturePartsAsync: generateQuicAwgSignaturePartsAsync,
+        generateQuicAwgSignatureAsync: generateQuicAwgSignatureAsync,
         helpers: {
             bytesToHex: bytesToHex,
             chunkPayload: chunkPayload,
