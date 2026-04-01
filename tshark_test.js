@@ -48,6 +48,37 @@ function formatHex(bytes) {
 let report = "";
 let successCount = 0;
 let totalCount = 0;
+const validationRules = {
+    dns: { all: ["dns", "standard query"], anyOf: [" a ", " aaaa ", " https "] },
+    mdns: { all: ["mdns", "question"] },
+    ssdp: { all: ["ssdp", "m-search"] },
+    llmnr: { all: ["llmnr", "standard query"] },
+    nbns: { all: ["nbns", "name query"] },
+    quic: { all: ["quic", "client hello"] },
+    tls_client_hello: { all: ["tls", "client hello"] },
+    http2: { all: ["http2", "headers"] },
+    http_browser: { all: ["http", "user-agent: mozilla/"] },
+    websocket: { all: ["http", "upgrade: websocket", "sec-websocket-key"] },
+    curl: { all: ["http", "user-agent: curl/"] },
+    stun: { all: ["stun", "fingerprint"] },
+    dtls: { all: ["dtls", "client hello"] },
+    sip: { all: ["sip", "contact:"] },
+    rtp: { all: ["payload type", "sequence number"] },
+    rtcp: { all: ["rtcp", "sender report"], forbidden: ["malformed packet"] },
+    coap: { all: ["coap", "token"] },
+    mqtt: { all: ["mqtt", "connect command"] },
+    ntp: { all: ["ntp", "version 4"] },
+    dhcp_discover: { all: ["dhcp", "host name"] },
+    snmp: { all: ["snmp", "variable-bindings"] },
+    syslog: { all: ["syslog", "payloadgen"] },
+    tftp: { all: ["tftp", "transfer type"] },
+    radius: { all: ["radius", "nas-identifier"] },
+    redis: { all: ["resp"], anyOf: ["hello", "client setname", "client setinfo", "ping"] },
+    postgresql: { all: ["postgresql"], anyOf: ["startup message", "parameter name: user"] },
+    mysql: { all: ["mysql", "command: query"] },
+    utp: { all: ["connection id", "window size"] },
+    bittorrent_dht: { all: ["bt-dht"], anyOf: ["ping", "find_node"] }
+};
 
 function getWiresharkCommands() {
     const isWSL = process.platform === 'linux' && fs.existsSync('/mnt/c/Windows');
@@ -108,6 +139,7 @@ async function testProtocol(p) {
     
     const portArgs = net.proto === 'tcp' ? ['-T', `1234,${net.port}`] : ['-u', `1234,${net.port}`];
     const wireshark = getWiresharkCommands();
+    const decodeArgs = getTsharkDecodeArgs(p.id, net);
     
     try {
         execFileSync(
@@ -117,20 +149,23 @@ async function testProtocol(p) {
         );
         const tsharkObj = execFileSync(
             wireshark.tshark,
-            ['-r', `temp_${p.id}.pcap`, '-T', 'fields', '-e', '_ws.col.Protocol', '-e', '_ws.col.Info'],
+            decodeArgs.concat(['-r', `temp_${p.id}.pcap`, '-T', 'fields', '-e', '_ws.col.Protocol', '-e', '_ws.col.Info']),
+            { stdio: 'pipe' }
+        );
+        const verboseObj = execFileSync(
+            wireshark.tshark,
+            decodeArgs.concat(['-r', `temp_${p.id}.pcap`, '-V']),
             { stdio: 'pipe' }
         );
         const output = tsharkObj.toString().trim();
-        
-        // Check if protocol was detected correctly
-        const protocolDetected = output.toLowerCase().includes(p.id.replace('_', '')) || 
-                                 output.toLowerCase().includes(getExpectedProtocol(p.id));
-        
-        if (protocolDetected || output.length > 0) {
+        const verbose = verboseObj.toString();
+        const validation = validateDissection(p.id, output, verbose);
+
+        if (validation.passed) {
             successCount++;
             report += `[${p.id.toUpperCase()}] ✅\n${output}\n\n`;
         } else {
-            report += `[${p.id.toUpperCase()}] ⚠️  Detected but unclear\n${output}\n\n`;
+            report += `[${p.id.toUpperCase()}] ⚠️  Validation failed\n${output}\nMissing: ${validation.missing.join(', ') || 'none'}\nBlocked: ${validation.blocked.join(', ') || 'none'}\n\n`;
         }
     } catch(err) {
         const errorMsg = err.message || err.toString();
@@ -155,6 +190,42 @@ function getExpectedProtocol(id) {
         'dhcp_discover': 'dhcp'
     };
     return map[id] || id;
+}
+
+function getTsharkDecodeArgs(id, net) {
+    if (id === 'rtp') {
+        return ['-d', `udp.port==${net.port},rtp`];
+    }
+
+    if (id === 'rtcp') {
+        return ['-d', `udp.port==${net.port},rtcp`];
+    }
+
+    if (id === 'utp') {
+        return ['-d', `udp.port==${net.port},bt-utp`];
+    }
+
+    return [];
+}
+
+function validateDissection(protocolId, summaryOutput, verboseOutput) {
+    const combined = `${summaryOutput}\n${verboseOutput}`.toLowerCase();
+    const coarseDetected = combined.includes(protocolId.replace('_', '')) ||
+        combined.includes(getExpectedProtocol(protocolId));
+    const rule = validationRules[protocolId] || { all: [getExpectedProtocol(protocolId)] };
+    const missing = (rule.all || []).filter(pattern => !combined.includes(pattern));
+    const anyOfFailed = rule.anyOf && !rule.anyOf.some(pattern => combined.includes(pattern));
+    const blocked = (rule.forbidden || []).filter(pattern => combined.includes(pattern));
+
+    if (anyOfFailed) {
+        missing.push(`one of: ${rule.anyOf.join(' | ')}`);
+    }
+
+    return {
+        passed: coarseDetected && missing.length === 0 && blocked.length === 0,
+        missing,
+        blocked
+    };
 }
 
 async function runTests() {

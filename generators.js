@@ -23,6 +23,91 @@
     var CURL_USER_AGENTS = Data.CURL_USER_AGENTS;
     var SSDP_SEARCH_TARGETS = Data.SSDP_SEARCH_TARGETS;
     var LATEST_QUIC_VERSION = Data.LATEST_QUIC_VERSION;
+    var DNS_QUERY_TYPES = [0x0001, 0x001C, 0x0041];
+    var MDNS_DISCOVERY_NAMES = [
+        "_services._dns-sd._udp.local",
+        "_googlecast._tcp.local",
+        "_airplay._tcp.local"
+    ];
+    var NBNS_SUFFIX_OPTIONS = [0x00, 0x20];
+    var SSDP_USER_AGENTS = [
+        "Microsoft-Windows/10.0 UPnP/1.0 SSDP-Discovery/1.0",
+        "macOS/15.4 UPnP/1.1 ControlPoint/1.0",
+        "Linux/6.8 UPnP/1.1 PayloadGen/1.0"
+    ];
+    var STUN_SOFTWARE_NAMES = [
+        "Chrome WebRTC ICE agent",
+        "Firefox ICE stack",
+        "Safari WebRTC networking"
+    ];
+    var DHCP_CLIENT_PROFILES = [
+        { hostPrefix: "DESKTOP-", vendorClass: "MSFT 5.0", maxMessageSize: 1500, parameterRequestList: [0x01, 0x03, 0x06, 0x0F, 0x1F, 0x21, 0x2B, 0x2C, 0x2E, 0x2F, 0x79, 0xF9, 0xFC] },
+        { hostPrefix: "android-", vendorClass: "android-dhcp-14", maxMessageSize: 1500, parameterRequestList: [0x01, 0x03, 0x06, 0x0F, 0x1A, 0x1C, 0x33, 0x3A, 0x3B, 0x79, 0xFC] },
+        { hostPrefix: "ip-", vendorClass: "dhcpcd-10.0.6:Linux-6.8", maxMessageSize: 1500, parameterRequestList: [0x01, 0x03, 0x06, 0x0C, 0x0F, 0x1A, 0x1C, 0x2A, 0x2B, 0x79, 0xFC] }
+    ];
+    var COMMON_SNMP_OIDS = [
+        "1.3.6.1.2.1.1.1.0",
+        "1.3.6.1.2.1.1.3.0",
+        "1.3.6.1.2.1.1.5.0",
+        "1.3.6.1.2.1.25.1.1.0"
+    ];
+    var SYSLOG_APP_NAMES = ["payloadgen", "systemd", "sshd", "NetworkManager"];
+    var BROWSER_RUNTIME_PROFILES = {
+        chrome: {
+            platform: "Windows",
+            userAgentTemplate: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{version} Safari/537.36",
+            acceptLanguage: "en-US,en;q=0.9",
+            acceptEncoding: "gzip, deflate, br, zstd",
+            websocketExtensions: "permessage-deflate; client_max_window_bits",
+            secChUaBrands: ["Chromium", "Google Chrome", "Not=A?Brand"],
+            http2Settings: [
+                { id: 0x0001, value: 65536 },
+                { id: 0x0003, value: 1000 },
+                { id: 0x0004, value: 6291456 },
+                { id: 0x0006, value: 262144 }
+            ]
+        },
+        firefox: {
+            platform: "Windows",
+            userAgentTemplate: "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:{version}) Gecko/20100101 Firefox/{version}",
+            acceptLanguage: "en-US,en;q=0.5",
+            acceptEncoding: "gzip, deflate, br, zstd",
+            websocketExtensions: "permessage-deflate",
+            secChUaBrands: [],
+            http2Settings: [
+                { id: 0x0001, value: 65536 },
+                { id: 0x0004, value: 131072 },
+                { id: 0x0005, value: 16384 }
+            ]
+        },
+        safari: {
+            platform: "macOS",
+            userAgentTemplate: "Mozilla/5.0 (Macintosh; Intel Mac OS X 15_4) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/{version} Safari/605.1.15",
+            acceptLanguage: "en-US",
+            acceptEncoding: "gzip, deflate, br",
+            websocketExtensions: "permessage-deflate; client_max_window_bits",
+            secChUaBrands: [],
+            http2Settings: [
+                { id: 0x0001, value: 65536 },
+                { id: 0x0004, value: 1048576 },
+                { id: 0x0006, value: 262144 }
+            ]
+        },
+        edge: {
+            platform: "Windows",
+            userAgentTemplate: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.7680.154 Safari/537.36 Edg/{version}",
+            acceptLanguage: "en-US,en;q=0.9",
+            acceptEncoding: "gzip, deflate, br, zstd",
+            websocketExtensions: "permessage-deflate; client_max_window_bits",
+            secChUaBrands: ["Chromium", "Microsoft Edge", "Not=A?Brand"],
+            http2Settings: [
+                { id: 0x0001, value: 65536 },
+                { id: 0x0003, value: 1000 },
+                { id: 0x0004, value: 6291456 },
+                { id: 0x0006, value: 262144 }
+            ]
+        }
+    };
     var QUIC_VERSION_DEFS = {
         v1: { value: "v1", wireValue: 0x00000001, initialHeaderBase: 0xC0 },
         v2: { value: "v2", wireValue: 0x6B3343CF, initialHeaderBase: 0xD0 }
@@ -51,47 +136,74 @@
     }
 
     function generateDnsPayload(options) {
-        return buildDnsQuestionPayload(randomIntExclusive(65535), 0x0100, encodeDnsName(options.host), 0x0001, 0x0001);
+        return buildDnsQuestionPayload(
+            randomIntExclusive(65535),
+            0x0100,
+            encodeDnsName(options.host),
+            randomItem(DNS_QUERY_TYPES),
+            0x0001,
+            buildDnsOptRecord(1232)
+        );
     }
 
     function generateMdnsPayload(options) {
+        var useServiceDiscovery = randomIntExclusive(3) === 0;
         var queryClass = randomIntExclusive(2) === 0 ? 0x0001 : 0x8001;
-        var randomizedHost = randomizeAsciiCase(options.host);
-        return buildDnsQuestionPayload(0x0000, 0x0000, encodeDnsName(randomizedHost), 0x0001, queryClass);
+        var queryName = useServiceDiscovery ? randomItem(MDNS_DISCOVERY_NAMES) : randomizeAsciiCase(options.host);
+        var queryType = useServiceDiscovery ? 0x000C : randomItem([0x0001, 0x001C]);
+        return buildDnsQuestionPayload(0x0000, 0x0000, encodeDnsName(queryName), queryType, queryClass);
     }
 
     function generateLlmnrPayload(options) {
-        return buildDnsQuestionPayload(randomIntExclusive(65535), 0x0000, encodeDnsName(options.host), 0x0001, 0x0001);
+        return buildDnsQuestionPayload(randomIntExclusive(65535), 0x0000, encodeDnsName(options.host), randomItem([0x0001, 0x001C]), 0x0001);
     }
 
     function generateNbnsPayload(options) {
-        return buildDnsQuestionPayload(randomIntExclusive(65535), 0x0000, encodeNbnsName(options.host), 0x0020, 0x0001);
+        var suffix = randomItem(NBNS_SUFFIX_OPTIONS);
+        var queryType = suffix === 0x20 ? 0x0020 : 0x0021;
+        return buildDnsQuestionPayload(randomIntExclusive(65535), 0x0000, encodeNbnsName(options.host, suffix), queryType, 0x0001);
     }
 
-    function buildDnsQuestionPayload(id, flags, nameBytes, typeValue, classValue) {
+    function buildDnsQuestionPayload(id, flags, nameBytes, typeValue, classValue, additionalRecordBytes) {
+        var additionalCount = additionalRecordBytes && additionalRecordBytes.length ? 1 : 0;
         return concatBytes(
             u16(id),
             u16(flags),
             u16(1),
             u16(0),
             u16(0),
-            u16(0),
+            u16(additionalCount),
             nameBytes,
             u16(typeValue),
-            u16(classValue)
+            u16(classValue),
+            additionalRecordBytes || zeroBytes(0)
+        );
+    }
+
+    function buildDnsOptRecord(udpPayloadSize) {
+        return concatBytes(
+            Uint8Array.from([0x00]),
+            u16(0x0029),
+            u16(udpPayloadSize || 1232),
+            u32(0),
+            u16(0)
         );
     }
 
     function generateSsdpPayload() {
         var mx = 1 + randomIntExclusive(5);
         var searchTarget = randomItem(SSDP_SEARCH_TARGETS);
-        var agentSuffix = bytesToHex(randomBytes(2));
-        var ssdpMessage = "M-SEARCH * HTTP/1.1\r\n" +
-            "Host: 239.255.255.250:1900\r\n" +
-            "Man: \"ssdp:discover\"\r\n" +
-            "ST: " + searchTarget + "\r\n" +
-            "MX: " + mx + "\r\n" +
-            "User-Agent: PayloadGen/" + agentSuffix + "\r\n\r\n";
+        var ssdpMessage = [
+            "M-SEARCH * HTTP/1.1",
+            "HOST: 239.255.255.250:1900",
+            "MAN: \"ssdp:discover\"",
+            "ST: " + searchTarget,
+            "MX: " + mx,
+            "USER-AGENT: " + randomItem(SSDP_USER_AGENTS),
+            "ACCEPT-LANGUAGE: en-US,en;q=0.9",
+            "",
+            ""
+        ].join("\r\n");
 
         return encodeText(ssdpMessage);
     }
@@ -102,6 +214,7 @@
             withTls13: true,
             alpnProtocol: "h3",
             browserProfile: options.browserProfile,
+            browserVersion: options.browserVersion,
             withQuicTransportParameters: true,
             quicSourceConnectionId: scid
         });
@@ -253,17 +366,21 @@
         return bytes.slice(start, end === Infinity ? bytes.length : end);
     }
 
-    // Synchronous QUIC payload (backward compatible, uses random masking)
+    // Synchronous QUIC payload fallback when authenticated QUIC protection is unavailable.
     function generateQuicPayload(options) {
         var version = resolveQuicVersion(options.quicVersion);
         var dcid = randomBytes(8);
         var scid = randomBytes(8);
         var packetNumber = randomBytes(4);
         var clientHello = buildQuicClientHello(options.host, options, scid);
-        var cryptoBody = options.quicEncrypt ? maskQuicCryptoBody(clientHello) : clientHello;
-        var cryptoFrame = buildQuicCryptoFrame(cryptoBody, 0);
+        var cryptoFrame = buildQuicCryptoFrame(clientHello, 0);
+        var payload = cryptoFrame;
 
-        return buildPlainQuicInitialPacket(version, dcid, scid, packetNumber, cryptoFrame);
+        if (options.quicEncrypt) {
+            payload = concatBytes(cryptoFrame, zeroBytes(Math.max(0, 1200 - (1 + 4 + 1 + dcid.length + 1 + scid.length + 1 + 2 + packetNumber.length + cryptoFrame.length))));
+        }
+
+        return buildPlainQuicInitialPacket(version, dcid, scid, packetNumber, payload);
     }
 
     // Async QUIC payload with proper QUIC Initial encryption.
@@ -336,6 +453,7 @@
             withTls13: true,
             alpnProtocol: options.tlsAlpn,
             browserProfile: options.browserProfile,
+            browserVersion: options.browserVersion,
             withQuicTransportParameters: false
         });
 
@@ -347,93 +465,86 @@
         );
     }
 
-    function generateHttp2Payload() {
-        var availableSettings = [
-            { id: 0x0001, values: [4096, 8192, 16384] },
-            { id: 0x0003, values: [100, 250, 1000] },
-            { id: 0x0004, values: [65535, 98304, 131072] },
-            { id: 0x0005, values: [16384, 32768] },
-            { id: 0x0006, values: [65536, 262144, 1048576] }
-        ];
-        var selectedCount = 2 + randomIntExclusive(availableSettings.length - 1);
-        var selected = shuffleItems(availableSettings).slice(0, selectedCount);
-        var settingsBytes = concatBytes.apply(null, selected.map(function (setting) {
-            return concatBytes(
-                u16(setting.id),
-                u32(randomItem(setting.values))
-            );
+    function generateHttp2Payload(options) {
+        var browser = resolveBrowserProfile(options.browserProfile, options.browserVersion);
+        var settingsBytes = concatBytes.apply(null, browser.http2Settings.map(function (setting) {
+            return concatBytes(u16(setting.id), u32(setting.value));
         }));
 
         return concatBytes(
             encodeText("PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n"),
-            u24(settingsBytes.length),
-            Uint8Array.from([0x04, 0x00]),
-            u32(0),
-            settingsBytes
+            buildHttp2Frame(0x04, 0x00, 0, settingsBytes),
+            buildHttp2Frame(0x08, 0x00, 0, u32(15663105)),
+            buildHttp2HeadersFrame(options.host || CONFIG.defaultHost, options.path || "/", browser)
         );
     }
 
     function generateHttpBrowserPayload(options) {
+        var browser = resolveBrowserProfile(options.browserProfile, options.browserVersion);
         var target = withRandomQuery(options.path, options.randomQuery);
-        var browserMessage = "GET " + target + " HTTP/1.1\r\n" +
-            "Host: " + options.host + "\r\n" +
-            "User-Agent: " + randomItem(BROWSER_USER_AGENTS) + "\r\n" +
-            "Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8\r\n" +
-            "Accept-Language: en-US,en;q=0.9\r\n" +
-            "Connection: keep-alive\r\n" +
-            "Upgrade-Insecure-Requests: 1\r\n" +
-            "Sec-Fetch-Site: none\r\n" +
-            "Sec-Fetch-Mode: navigate\r\n" +
-            "Sec-Fetch-Dest: document\r\n\r\n";
+        var headers = buildBrowserRequestHeaders(browser, options.host, target, false);
+        var browserMessage = headers.join("\r\n") + "\r\n\r\n";
 
         return encodeText(browserMessage);
     }
 
     function generateWebsocketPayload(options) {
-        var websocketMessage = "GET " + options.path + " HTTP/1.1\r\n" +
-            "Host: " + options.host + "\r\n" +
-            "Upgrade: websocket\r\n" +
-            "Connection: Upgrade\r\n" +
-            "Sec-WebSocket-Key: " + base64EncodeBytes(randomBytes(16)) + "\r\n" +
-            "Sec-WebSocket-Version: 13\r\n" +
-            "Origin: https://" + options.host + "\r\n\r\n";
+        var browser = resolveBrowserProfile(options.browserProfile, options.browserVersion);
+        var websocketMessage = buildBrowserWebsocketRequest(browser, options.host, options.path).join("\r\n") + "\r\n\r\n";
 
         return encodeText(websocketMessage);
     }
 
     function generateCurlPayload(options) {
         var target = withRandomQuery(options.path, options.randomQuery);
+        var curlVersion = randomItem(CURL_USER_AGENTS);
         var lines = [
             options.httpMethod + " " + target + " HTTP/1.1",
             "Host: " + options.host,
-            "User-Agent: " + randomItem(CURL_USER_AGENTS),
+            "User-Agent: " + curlVersion,
             "Accept: */*",
+            "Accept-Encoding: gzip, deflate, br",
             "Connection: close"
         ];
 
         if (options.httpMethod === "POST") {
             lines.push("Content-Length: 0");
+            lines.push("Content-Type: application/x-www-form-urlencoded");
         }
 
         return encodeText(lines.join("\r\n") + "\r\n\r\n");
     }
 
     function generateStunPayload(options) {
-        var hostBytes = encodeText(options.host);
-        var padding = (4 - (hostBytes.length % 4)) % 4;
-        var attrValue = concatBytes(hostBytes, zeroBytes(padding));
-        var attr = concatBytes(
-            u16(0x8022),
-            u16(hostBytes.length),
-            attrValue
+        var softwareAttr = buildStunAttribute(0x8022, encodeText(randomItem(STUN_SOFTWARE_NAMES)));
+        var priorityAttr = buildStunAttribute(0x0024, u32(randomUint32() | 0x40000000));
+        var controlAttr = buildStunAttribute(randomIntExclusive(2) === 0 ? 0x8029 : 0x802A, concatBytes(u32(randomUint32()), u32(randomUint32())));
+        var usernameBytes = encodeText(bytesToHex(randomBytes(4)) + ":" + normalizeHost(options.host));
+        var usernameAttr = buildStunAttribute(0x0006, usernameBytes);
+        var transactionId = randomBytes(12);
+        var messageWithoutFingerprint = concatBytes(
+            u16(0x0001),
+            u16(softwareAttr.length + priorityAttr.length + controlAttr.length + usernameAttr.length),
+            u32(0x2112A442),
+            transactionId,
+            softwareAttr,
+            priorityAttr,
+            controlAttr,
+            usernameAttr
         );
+        var fingerprintValue = u32((crc32(messageWithoutFingerprint) ^ 0x5354554E) >>> 0);
+        var fingerprintAttr = buildStunAttribute(0x8028, fingerprintValue);
 
         return concatBytes(
             u16(0x0001),
-            u16(attr.length),
+            u16(softwareAttr.length + priorityAttr.length + controlAttr.length + usernameAttr.length + fingerprintAttr.length),
             u32(0x2112A442),
-            randomBytes(12),
-            attr
+            transactionId,
+            softwareAttr,
+            priorityAttr,
+            controlAttr,
+            usernameAttr,
+            fingerprintAttr
         );
     }
 
@@ -451,7 +562,7 @@
         return concatBytes(
             Uint8Array.from([0x16, 0xFE, 0xFD]),
             u16(0),
-            randomBytes(6),
+            zeroBytes(6),
             u16(handshake.length),
             handshake
         );
@@ -462,55 +573,101 @@
         var branch = randomInt31();
         var tag = randomInt31();
         var callId = randomInt31();
-        var sipMessage = action + " sip:" + options.host + " SIP/2.0\r\n" +
-            "Via: SIP/2.0/UDP " + options.host + ":5060;branch=z9hG4bK-" + branch + "\r\n" +
-            "Max-Forwards: 70\r\n" +
-            "From: <sip:user@" + options.host + ">;tag=" + tag + "\r\n" +
-            "To: <sip:user@" + options.host + ">\r\n" +
-            "Call-ID: " + callId + "@" + options.host + "\r\n" +
-            "CSeq: 1 " + action + "\r\n" +
-            "User-Agent: PayloadGen\r\n" +
-            "Content-Length: 0\r\n\r\n";
+        var requestUri = action === "REGISTER" ? "sip:" + options.host : "sip:user@" + options.host;
+        var lines = [
+            action + " " + requestUri + " SIP/2.0",
+            "Via: SIP/2.0/UDP 192.0.2." + (10 + randomIntExclusive(80)) + ":5060;branch=z9hG4bK-" + branch + ";rport",
+            "Max-Forwards: 70",
+            "From: \"PayloadGen\" <sip:user@" + options.host + ">;tag=" + tag,
+            "To: <sip:user@" + options.host + ">",
+            "Call-ID: " + callId + "@" + options.host,
+            "CSeq: 1 " + action,
+            "Contact: <sip:user@192.0.2." + (10 + randomIntExclusive(80)) + ":5060;transport=udp>",
+            "Allow: INVITE, ACK, CANCEL, OPTIONS, BYE, REFER, NOTIFY, MESSAGE, SUBSCRIBE, INFO",
+            "Supported: replaces, timer, path",
+            "User-Agent: PayloadGen Softphone/1.0",
+            action === "REGISTER" ? "Expires: 600" : "Accept: application/sdp",
+            "Content-Length: 0",
+            "",
+            ""
+        ];
 
-        return encodeText(sipMessage);
+        return encodeText(lines.join("\r\n"));
     }
 
     function generateRtpPayload() {
+        var payloadType = randomItem([0x00, 0x08, 0x60]);
+        var sequenceNumber = randomIntExclusive(65535);
+        var timestamp = randomUint32();
+        var ssrc = randomUint32();
+        var payload = payloadType === 0x60 ? randomBytes(96) : randomBytes(160);
         return concatBytes(
-            Uint8Array.from([0x80, 0x60]),
-            u16(randomIntExclusive(65535)),
-            u32(randomUint32()),
-            u32(randomUint32())
+            Uint8Array.from([0x80, payloadType]),
+            u16(sequenceNumber),
+            u32(timestamp),
+            u32(ssrc),
+            payload
         );
     }
 
     function generateRtcpPayload() {
-        return concatBytes(
-            Uint8Array.from([0x80, 0xC9]),
-            u16(0x0001),
-            u32(randomUint32())
+        var ssrc = randomUint32();
+        var ntpTimestamp = encodeNtpTimestamp(new Date());
+        var senderReport = concatBytes(
+            Uint8Array.from([0x80, 0xC8]),
+            u16(0x0006),
+            u32(ssrc),
+            ntpTimestamp,
+            u32(randomUint32()),
+            u32(1 + randomIntExclusive(64)),
+            u32(160 + randomIntExclusive(4096))
         );
+        var cname = encodeText("payloadgen@" + CONFIG.defaultHost);
+        var sdesValue = concatBytes(
+            u32(ssrc),
+            Uint8Array.from([0x01, cname.length]),
+            cname,
+            Uint8Array.from([0x00]),
+            zeroBytes((4 - ((4 + 2 + cname.length + 1) % 4)) % 4)
+        );
+        var sdes = concatBytes(
+            Uint8Array.from([0x81, 0xCA]),
+            u16(((4 + sdesValue.length) / 4) - 1),
+            sdesValue
+        );
+        return concatBytes(senderReport, sdes);
     }
 
     function generateCoapPayload(options) {
-        var token = randomBytes(4);
+        var token = randomBytes(2 + randomIntExclusive(7));
         var messageId = randomIntExclusive(65535);
-        var code = options.coapMethod === "POST" ? 0x02 : 0x01;
+        var isPost = options.coapMethod === "POST";
+        var code = isPost ? 0x02 : 0x01;
+        var requestOptions = buildCoapOptions(options.host, options.path, isPost);
+        var payload = isPost ? concatBytes(Uint8Array.from([0xFF]), encodeText("{\"probe\":\"payloadgen\"}")) : zeroBytes(0);
 
         return concatBytes(
-            Uint8Array.from([0x44, code]),
+            Uint8Array.from([(randomIntExclusive(2) === 0 ? 0x40 : 0x50) | token.length, code]),
             u16(messageId),
             token,
-            buildCoapOptions(options.host, options.path)
+            requestOptions,
+            payload
         );
     }
 
     function generateMqttPayload(options) {
         var clientId = String(options.clientId || "").trim() || ("payloadgen-" + bytesToHex(randomBytes(2)));
+        var protocolLevel = randomItem([0x04, 0x05]);
+        var connectFlags = 0x02;
+        var properties = protocolLevel === 0x05 ? concatBytes(
+            Uint8Array.from([0x21]), u16(100),
+            Uint8Array.from([0x27]), u32(1048576)
+        ) : zeroBytes(0);
         var variableHeader = concatBytes(
             encodeLengthPrefixedText("MQTT"),
-            Uint8Array.from([0x04, 0x02]),
-            u16(60)
+            Uint8Array.from([protocolLevel, connectFlags]),
+            u16(60),
+            protocolLevel === 0x05 ? concatBytes(encodeMqttRemainingLength(properties.length), properties) : zeroBytes(0)
         );
         var payload = encodeLengthPrefixedText(clientId);
 
@@ -523,15 +680,25 @@
     }
 
     function generateNtpPayload() {
+        var now = new Date();
         var payload = zeroBytes(48);
         payload[0] = 0x23;
-        payload.set(randomBytes(8), 40);
+        payload[1] = 0x00;
+        payload[2] = 0x06;
+        payload[3] = 0xEC;
+        payload.set(u32(0x00000100), 4);
+        payload.set(u32(0x00000100), 8);
+        payload.set(encodeText("INIT"), 12);
+        payload.set(encodeNtpTimestamp(new Date(now.getTime() - 1000)), 16);
+        payload.set(encodeNtpTimestamp(now), 40);
         return payload;
     }
 
     function generateDhcpDiscoverPayload() {
         var xid = randomBytes(4);
         var mac = randomMacAddress();
+        var clientProfile = randomItem(DHCP_CLIENT_PROFILES);
+        var hostname = clientProfile.hostPrefix + bytesToHex(randomBytes(3)).toUpperCase();
         var chaddr = concatBytes(mac, zeroBytes(10));
         var bootp = concatBytes(
             Uint8Array.from([0x01, 0x01, 0x06, 0x00]),
@@ -547,10 +714,12 @@
             zeroBytes(128)
         );
         var options = concatBytes(
-            Uint8Array.from([0x35, 0x01, 0x01]),
-            Uint8Array.from([0x37, 0x06, 0x01, 0x03, 0x06, 0x0F, 0x33, 0x36]),
-            Uint8Array.from([0x3D, 0x07, 0x01]),
-            mac,
+            buildDhcpOption(0x35, Uint8Array.from([0x01])),
+            buildDhcpOption(0x3D, concatBytes(Uint8Array.from([0x01]), mac)),
+            buildDhcpOption(0x0C, encodeText(hostname)),
+            buildDhcpOption(0x37, Uint8Array.from(clientProfile.parameterRequestList)),
+            buildDhcpOption(0x39, u16(clientProfile.maxMessageSize)),
+            buildDhcpOption(0x3C, encodeText(clientProfile.vendorClass)),
             Uint8Array.from([0xFF])
         );
 
@@ -559,20 +728,22 @@
 
     function generateSnmpPayload(options) {
         var requestId = randomInt31();
-        var pdu = berTlv(0xA0, concatBytes(
+        var pduTag = randomIntExclusive(2) === 0 ? 0xA0 : 0xA1;
+        var oid = options.oid || randomItem(COMMON_SNMP_OIDS);
+        var pdu = berTlv(pduTag, concatBytes(
             berInteger(requestId),
             berInteger(0),
             berInteger(0),
             berSequence([
                 berSequence([
-                    berOid(options.oid),
+                    berOid(oid),
                     berNull()
                 ])
             ])
         ));
 
         return berSequence([
-            berInteger(0),
+            berInteger(randomIntExclusive(2)),
             berOctetString(encodeText(options.community)),
             pdu
         ]);
@@ -582,27 +753,38 @@
         var facilityCode = getSyslogFacilityCode(options.syslogFacility);
         var severityCode = getSyslogSeverityCode(options.syslogSeverity);
         var pri = facilityCode * 8 + severityCode;
-        return encodeText("<" + pri + ">" + formatSyslogTimestamp(new Date()) + " payloadgen payloadgen: " + options.message);
+        var appName = randomItem(SYSLOG_APP_NAMES);
+
+        if (randomIntExclusive(2) === 0) {
+            return encodeText("<" + pri + ">1 " + new Date().toISOString() + " payloadgen.local " + appName + " " + (100 + randomIntExclusive(900)) + " MSG" + randomIntExclusive(1000) + " - " + options.message);
+        }
+
+        return encodeText("<" + pri + ">" + formatSyslogTimestamp(new Date()) + " payloadgen " + appName + ": " + options.message);
     }
 
     function generateTftpPayload(options) {
         var optionBytes = buildTftpOptionBytes();
+        var opcode = randomIntExclusive(4) === 0 ? 0x0002 : 0x0001;
+        var mode = randomIntExclusive(4) === 0 ? "netascii" : "octet";
 
         return concatBytes(
-            u16(0x0001),
+            u16(opcode),
             encodeZeroTerminatedText(options.filename),
-            encodeZeroTerminatedText("octet"),
+            encodeZeroTerminatedText(mode),
             optionBytes
         );
     }
 
     function generateRadiusPayload(options) {
         var usernameBytes = encodeText(options.username || "user");
+        var nasIp = Uint8Array.from([192, 0, 2, 20 + randomIntExclusive(50)]);
         var attributes = concatBytes(
-            Uint8Array.from([0x01, usernameBytes.length + 2]),
-            usernameBytes,
-            Uint8Array.from([0x20, 0x0C]),
-            encodeText("payloadgen")
+            buildRadiusAttribute(0x01, usernameBytes),
+            buildRadiusAttribute(0x04, nasIp),
+            buildRadiusAttribute(0x05, u32(1 + randomIntExclusive(16))),
+            buildRadiusAttribute(0x06, u32(2)),
+            buildRadiusAttribute(0x20, encodeText("payloadgen-nas")),
+            buildRadiusAttribute(0x1E, encodeText("payloadgen"))
         );
 
         return concatBytes(
@@ -617,10 +799,14 @@
         var token = "payloadgen-" + bytesToHex(randomBytes(3));
 
         if (randomIntExclusive(2) === 0) {
-            return encodeText("*2\r\n$4\r\nPING\r\n$" + token.length + "\r\n" + token + "\r\n");
+            return encodeText(
+                "*2\r\n$5\r\nHELLO\r\n$1\r\n3\r\n" +
+                "*4\r\n$6\r\nCLIENT\r\n$7\r\nSETINFO\r\n$8\r\nLIB-NAME\r\n$10\r\npayloadgen\r\n" +
+                "*2\r\n$4\r\nPING\r\n$" + token.length + "\r\n" + token + "\r\n"
+            );
         }
 
-        return encodeText("*2\r\n$4\r\nECHO\r\n$" + token.length + "\r\n" + token + "\r\n");
+        return encodeText("*3\r\n$6\r\nCLIENT\r\n$7\r\nSETNAME\r\n$" + token.length + "\r\n" + token + "\r\n");
     }
 
     function generatePostgresqlPayload(options) {
@@ -638,51 +824,63 @@
             encodeText("application_name"),
             Uint8Array.from([0x00]),
             encodeText(applicationName),
+            Uint8Array.from([0x00]),
+            encodeText("client_encoding"),
+            Uint8Array.from([0x00]),
+            encodeText("UTF8"),
             Uint8Array.from([0x00, 0x00])
         );
 
-        return concatBytes(u32(body.length + 4), body);
+        return concatBytes(
+            u32(8),
+            u32(80877103),
+            u32(body.length + 4),
+            body
+        );
     }
 
     function generateMysqlPayload(options) {
-        var usernameBytes = encodeText(options.username || "root");
-        var maxPacket = 0x00100000 + randomIntExclusive(0x00100000);
-        var collation = randomItem([0x08, 0x21, 0x2D]);
-        var payload = concatBytes(
-            u32le(0x0000A205),
-            u32le(maxPacket),
-            Uint8Array.from([collation]),
-            zeroBytes(23),
-            usernameBytes,
-            Uint8Array.from([0x00, 0x00])
-        );
-
-        return concatBytes(
-            u24le(payload.length),
-            Uint8Array.from([0x01]),
-            payload
-        );
+        var sql = "SELECT @@version_comment, CURRENT_USER()";
+        var payload = concatBytes(Uint8Array.from([0x03]), encodeText(sql));
+        return concatBytes(u24le(payload.length), Uint8Array.from([0x00]), payload);
     }
 
     function generateUtpPayload() {
+        var connectionId = randomIntExclusive(65535);
+        var sequenceNumber = 1 + randomIntExclusive(65534);
         return concatBytes(
             Uint8Array.from([0x41, 0x00]),
-            u16(randomIntExclusive(65535)),
+            u16(connectionId),
             u32(nowMicros32()),
             u32(0),
-            u32(0),
-            u16(0),
+            u32(randomItem([65536, 131072, 1048576])),
+            u16(sequenceNumber),
             u16(0)
         );
     }
 
     function generateBittorrentDhtPayload() {
+        var transactionId = bytesToHex(randomBytes(1));
+        var nodeId = randomBytes(20);
+
+        if (randomIntExclusive(2) === 0) {
+            return concatBytes(
+                encodeText("d1:ad2:id20:"),
+                nodeId,
+                encodeText("2:roi1ee1:q4:ping1:t2:"),
+                encodeText(transactionId),
+                encodeText("1:v4:LT011:y1:qe")
+            );
+        }
+
         return concatBytes(
             encodeText("d1:ad2:id20:"),
+            nodeId,
+            encodeText("2:roi1e6:target20:"),
             randomBytes(20),
-            encodeText("e1:q4:ping1:t2:"),
-            randomBytes(2),
-            encodeText("1:y1:qe")
+            encodeText("e1:q9:find_node1:t2:"),
+            encodeText(transactionId),
+            encodeText("1:v4:LT011:y1:qe")
         );
     }
 
@@ -691,9 +889,11 @@
     }
 
     function buildClientHelloBody(host, options) {
-        var greaseValue = selectGreaseValue();
-        var secondaryGreaseValue = selectGreaseValue(greaseValue);
+        var browser = resolveBrowserProfile(options.browserProfile, options.browserVersion);
         var isQuic = !!options.withQuicTransportParameters;
+        var fingerprint = resolveTlsFingerprint(browser, isQuic, options.alpnProtocol);
+        var greaseValue = fingerprint.useGrease ? selectGreaseValue() : null;
+        var secondaryGreaseValue = fingerprint.useSecondaryGrease ? selectGreaseValue(greaseValue) : null;
         var sessionId = randomBytes(32);
         var extensions = buildTlsExtensions(host, {
             withTls13: !!options.withTls13,
@@ -702,34 +902,10 @@
             secondaryGreaseValue: secondaryGreaseValue,
             isQuic: isQuic,
             withQuicTransportParameters: !!options.withQuicTransportParameters,
-            quicSourceConnectionId: options.quicSourceConnectionId || zeroBytes(0)
+            quicSourceConnectionId: options.quicSourceConnectionId || zeroBytes(0),
+            fingerprint: fingerprint
         });
-
-        var cipherSuites = isQuic
-            ? concatBytes(
-                u16(greaseValue),
-                u16(0x1301),
-                u16(0x1302),
-                u16(0x1303)
-            )
-            : concatBytes(
-                u16(greaseValue),
-                u16(0x1301),
-                u16(0x1302),
-                u16(0x1303),
-                u16(0xC02B),
-                u16(0xC02F),
-                u16(0xC02C),
-                u16(0xC030),
-                u16(0xCCA9),
-                u16(0xCCA8),
-                u16(0xC013),
-                u16(0xC014),
-                u16(0x009C),
-                u16(0x009D),
-                u16(0x002F),
-                u16(0x0035)
-            );
+        var cipherSuites = encodeCipherSuites(fingerprint.cipherSuites, greaseValue);
         
         var body = concatBytes(
             u16(options.legacyVersion),
@@ -754,13 +930,17 @@
         var sessionId = randomBytes(32);
         var extensions = concatBytes(
             buildServerNameExtension(host),
-            buildSupportedGroupsExtension(),
+            buildSupportedGroupsExtension(null, [0x001D, 0x0017, 0x0018]),
             buildEcPointFormatsExtension(),
-            buildSignatureAlgorithmsExtension()
+            buildSignatureAlgorithmsExtension(),
+            buildUseSrtpExtension(),
+            buildExtendedMasterSecretExtension()
         );
         var cipherSuites = concatBytes(
             u16(0xC02B),
             u16(0xC02F),
+            u16(0xCCA9),
+            u16(0xC02C),
             u16(0x009C),
             u16(0x009D)
         );
@@ -780,71 +960,53 @@
     }
 
     function buildTlsExtensions(host, options) {
-        // Extension order matters for fingerprinting. Use a browser-like TCP layout
-        // and a separate leaner QUIC layout so the ClientHello matches its transport.
-        var greaseValue = options.greaseValue;
         var isQuic = !!options.isQuic;
-        var parts = isQuic
-            ? [
-                buildGreaseExtension(greaseValue),
-                buildServerNameExtension(host),
-                buildSupportedGroupsExtension(greaseValue),
-                buildStatusRequestExtension(),
-                buildSignatureAlgorithmsExtension(),
-                buildSignedCertificateTimestampExtension(),
-                buildKeyShareExtension(greaseValue),
-                buildPskModesExtension()
-            ]
-            : [
-                buildGreaseExtension(greaseValue),
-                buildServerNameExtension(host),
-                buildExtendedMasterSecretExtension(),
-                buildRenegotiationInfoExtension(),
-                buildSupportedGroupsExtension(greaseValue),
-                buildEcPointFormatsExtension(),
-                buildSessionTicketExtension(),
-                buildStatusRequestExtension(),
-                buildSignatureAlgorithmsExtension(),
-                buildSignedCertificateTimestampExtension(),
-                buildKeyShareExtension(greaseValue),
-                buildPskModesExtension()
-            ];
+        var parts = [];
 
-        if (options.alpnProtocol) {
-            parts.splice(isQuic ? 3 : 7, 0, buildAlpnExtension(resolveAlpnProtocols(options.alpnProtocol, isQuic)));
-        }
-
-        if (options.withQuicTransportParameters) {
-            parts.push(buildQuicTransportParametersExtension(options.quicSourceConnectionId));
-        }
-
-        if (options.withTls13) {
-            var keyShareIndex = findExtensionInsertIndex(parts, 0x0033);
-            parts.splice(keyShareIndex, 0, buildSupportedVersionsExtension(greaseValue, isQuic));
-            parts.push(buildCompressCertificateExtension());
-        }
-
-        if (!isQuic && options.alpnProtocol === "h2") {
-            parts.push(buildApplicationSettingsExtension(["h2"]));
-        }
-
-        parts.push(buildGreaseExtension(options.secondaryGreaseValue));
-
-        // Calculate total length for padding
-        var currentLength = 0;
-        parts.forEach(function(part) {
-            currentLength += part.length;
+        options.fingerprint.extensionOrder.forEach(function (extensionName) {
+            if (extensionName === "grease" && Number.isFinite(options.greaseValue)) {
+                parts.push(buildGreaseExtension(options.greaseValue));
+            } else if (extensionName === "sni") {
+                parts.push(buildServerNameExtension(host));
+            } else if (extensionName === "extended_master_secret") {
+                parts.push(buildExtendedMasterSecretExtension());
+            } else if (extensionName === "renegotiation_info") {
+                parts.push(buildRenegotiationInfoExtension());
+            } else if (extensionName === "supported_groups") {
+                parts.push(buildSupportedGroupsExtension(options.greaseValue, options.fingerprint.supportedGroups));
+            } else if (extensionName === "ec_point_formats") {
+                parts.push(buildEcPointFormatsExtension());
+            } else if (extensionName === "session_ticket") {
+                parts.push(buildSessionTicketExtension());
+            } else if (extensionName === "alpn" && options.alpnProtocol) {
+                parts.push(buildAlpnExtension(resolveAlpnProtocols(options.alpnProtocol, isQuic)));
+            } else if (extensionName === "status_request") {
+                parts.push(buildStatusRequestExtension());
+            } else if (extensionName === "signature_algorithms") {
+                parts.push(buildSignatureAlgorithmsExtension(options.fingerprint.signatureAlgorithms));
+            } else if (extensionName === "sct") {
+                parts.push(buildSignedCertificateTimestampExtension());
+            } else if (extensionName === "supported_versions" && options.withTls13) {
+                parts.push(buildSupportedVersionsExtension(options.greaseValue, options.fingerprint.supportedVersions));
+            } else if (extensionName === "key_share") {
+                parts.push(buildKeyShareExtension(options.greaseValue, options.fingerprint.keyShares));
+            } else if (extensionName === "psk_modes") {
+                parts.push(buildPskModesExtension());
+            } else if (extensionName === "quic_transport_parameters" && options.withQuicTransportParameters) {
+                parts.push(buildQuicTransportParametersExtension(options.quicSourceConnectionId, options.fingerprint));
+            } else if (extensionName === "compress_certificate" && options.withTls13 && options.fingerprint.compressCertificateAlgorithms.length) {
+                parts.push(buildCompressCertificateExtension(options.fingerprint.compressCertificateAlgorithms));
+            } else if (extensionName === "application_settings" && !isQuic && options.alpnProtocol === "h2" && options.fingerprint.includeApplicationSettings) {
+                parts.push(buildApplicationSettingsExtension(["h2"]));
+            } else if (extensionName === "secondary_grease" && Number.isFinite(options.secondaryGreaseValue)) {
+                parts.push(buildGreaseExtension(options.secondaryGreaseValue));
+            } else if (extensionName === "padding") {
+                var paddingLength = calculateTlsPaddingLength(parts, options.fingerprint.paddingTarget);
+                if (paddingLength > 0) {
+                    parts.push(buildPaddingExtension(paddingLength));
+                }
+            }
         });
-
-        // Add padding to reach typical ClientHello size (512+ bytes)
-        // Chrome typically pads to avoid fingerprinting based on size
-        var targetSize = 512;
-        var headerSize = 4 + 2 + 32 + 1 + 32 + 2 + 30 + 2 + 2; // Approximate header size
-        var paddingNeeded = Math.max(0, targetSize - headerSize - currentLength - 4);
-        
-        if (paddingNeeded > 0) {
-            parts.push(buildPaddingExtension(paddingNeeded));  // 21 - padding
-        }
 
         return concatBytes.apply(null, parts);
     }
@@ -865,47 +1027,42 @@
         return concatBytes(u16(0x0010), u16(data.length), data);
     }
 
-    function buildSupportedVersionsExtension(greaseValue, isQuic) {
-        var versions = concatBytes(
-            u16(greaseValue),
-            u16(0x0304),
-            isQuic ? zeroBytes(0) : u16(0x0303)
-        );
-        if (isQuic) {
-            versions = concatBytes(u16(greaseValue), u16(0x0304));
-        }
-        return concatBytes(u16(0x002B), u16(versions.length + 1), Uint8Array.from([versions.length]), versions);
-    }
-
-    function buildSupportedGroupsExtension(greaseValue) {
+    function buildSupportedVersionsExtension(greaseValue, versions) {
         var parts = [];
 
         if (Number.isFinite(greaseValue)) {
             parts.push(u16(greaseValue));
         }
 
-        parts.push(
-            u16(0x001D),  // x25519 (most preferred)
-            u16(0x0017),  // secp256r1 (P-256)
-            u16(0x0018)   // secp384r1 (P-384)
-        );
+        (versions || [0x0304, 0x0303]).forEach(function (version) {
+            parts.push(u16(version));
+        });
+
+        var versionBytes = concatBytes.apply(null, parts);
+        return concatBytes(u16(0x002B), u16(versionBytes.length + 1), Uint8Array.from([versionBytes.length]), versionBytes);
+    }
+
+    function buildSupportedGroupsExtension(greaseValue, groups) {
+        var parts = [];
+
+        if (Number.isFinite(greaseValue)) {
+            parts.push(u16(greaseValue));
+        }
+
+        (groups || [0x001D, 0x0017, 0x0018]).forEach(function (group) {
+            parts.push(u16(group));
+        });
 
         var groups = concatBytes.apply(null, parts);
         return concatBytes(u16(0x000A), u16(groups.length + 2), u16(groups.length), groups);
     }
 
-    function buildSignatureAlgorithmsExtension() {
-        var algorithms = concatBytes(
-            u16(0x0403),  // ecdsa_secp256r1_sha256
-            u16(0x0804),  // rsa_pss_rsae_sha256
-            u16(0x0401),  // rsa_pkcs1_sha256
-            u16(0x0503),  // ecdsa_secp384r1_sha384
-            u16(0x0805),  // rsa_pss_rsae_sha384
-            u16(0x0501),  // rsa_pkcs1_sha384
-            u16(0x0806),  // rsa_pss_rsae_sha512
-            u16(0x0601),  // rsa_pkcs1_sha512
-            u16(0x0807)   // ed25519
-        );
+    function buildSignatureAlgorithmsExtension(signatureAlgorithms) {
+        var algorithms = concatBytes.apply(null, (signatureAlgorithms || [
+            0x0403, 0x0804, 0x0401, 0x0503, 0x0805, 0x0501, 0x0806, 0x0601, 0x0807
+        ]).map(function (algorithm) {
+            return u16(algorithm);
+        }));
         return concatBytes(u16(0x000D), u16(algorithms.length + 2), u16(algorithms.length), algorithms);
     }
 
@@ -917,16 +1074,19 @@
         return concatBytes(u16(0x002D), u16(2), Uint8Array.from([0x01, 0x01]));
     }
 
-    function buildKeyShareExtension(greaseValue) {
-        var keyBytes = randomBytes(32);
-        var entries = concatBytes(
-            u16(greaseValue),
-            u16(1),
-            Uint8Array.from([0x00]),
-            u16(0x001D),
-            u16(keyBytes.length),
-            keyBytes
-        );
+    function buildKeyShareExtension(greaseValue, groups) {
+        var entries = [];
+
+        if (Number.isFinite(greaseValue)) {
+            entries.push(u16(greaseValue), u16(1), Uint8Array.from([0x00]));
+        }
+
+        (groups || [0x001D]).forEach(function (group) {
+            var keyBytes = buildKeyShareValue(group);
+            entries.push(u16(group), u16(keyBytes.length), keyBytes);
+        });
+
+        entries = concatBytes.apply(null, entries);
         return concatBytes(u16(0x0033), u16(entries.length + 2), u16(entries.length), entries);
     }
 
@@ -961,13 +1121,16 @@
         return concatBytes(u16(0x0012), u16(0));
     }
 
-    function buildCompressCertificateExtension() {
+    function buildCompressCertificateExtension(algorithms) {
         // Extension 27 - Compress Certificate
-        var algorithms = concatBytes(
-            Uint8Array.from([0x02]),  // length
-            u16(0x0002)               // brotli
+        var encodedAlgorithms = concatBytes.apply(null, (algorithms || [0x0002]).map(function (algorithm) {
+            return u16(algorithm);
+        }));
+        var algorithmList = concatBytes(
+            Uint8Array.from([encodedAlgorithms.length]),
+            encodedAlgorithms
         );
-        return concatBytes(u16(0x001B), u16(algorithms.length), algorithms);
+        return concatBytes(u16(0x001B), u16(algorithmList.length), algorithmList);
     }
 
     function buildApplicationSettingsExtension(protocols) {
@@ -978,10 +1141,12 @@
         return concatBytes(u16(0x4469), u16(entries.length + 2), u16(entries.length), entries);
     }
 
-    function buildQuicTransportParametersExtension(sourceConnectionId) {
+    function buildQuicTransportParametersExtension(sourceConnectionId, fingerprint) {
+        var maxUdpPayloadSize = (fingerprint && fingerprint.maxUdpPayloadSize) || 1472;
+        var activeConnectionIdLimit = (fingerprint && fingerprint.activeConnectionIdLimit) || 8;
         var parameters = concatBytes(
             encodeTransportParameter(0x01, encodeQuicVarInt(30000)),
-            encodeTransportParameter(0x03, encodeQuicVarInt(1472)),
+            encodeTransportParameter(0x03, encodeQuicVarInt(maxUdpPayloadSize)),
             encodeTransportParameter(0x04, encodeQuicVarInt(15728640)),
             encodeTransportParameter(0x05, encodeQuicVarInt(6291456)),
             encodeTransportParameter(0x06, encodeQuicVarInt(6291456)),
@@ -991,7 +1156,7 @@
             encodeTransportParameter(0x0a, encodeQuicVarInt(3)),
             encodeTransportParameter(0x0b, encodeQuicVarInt(25)),
             encodeTransportParameter(0x0c, zeroBytes(0)),
-            encodeTransportParameter(0x0e, encodeQuicVarInt(8)),
+            encodeTransportParameter(0x0e, encodeQuicVarInt(activeConnectionIdLimit)),
             encodeTransportParameter(0x0f, sourceConnectionId)
         );
         return concatBytes(u16(0x0039), u16(parameters.length), parameters);
@@ -1057,21 +1222,383 @@
         return [protocol];
     }
 
-    function buildCoapOptions(host, path) {
+    function buildCoapOptions(host, path, isPost) {
         var currentOptionNumber = 0;
         var parts = [];
+        var pathParts = splitPathAndQuery(path);
 
         if (host) {
             parts.push(encodeCoapOption(3 - currentOptionNumber, encodeText(host)));
             currentOptionNumber = 3;
         }
 
-        splitPathSegments(path).forEach(function (segment) {
+        pathParts.segments.forEach(function (segment) {
             parts.push(encodeCoapOption(11 - currentOptionNumber, encodeText(segment)));
             currentOptionNumber = 11;
         });
 
+        if (isPost) {
+            parts.push(encodeCoapOption(12 - currentOptionNumber, Uint8Array.from([50])));
+            currentOptionNumber = 12;
+        }
+
+        pathParts.query.forEach(function (querySegment) {
+            parts.push(encodeCoapOption(15 - currentOptionNumber, encodeText(querySegment)));
+            currentOptionNumber = 15;
+        });
+
+        parts.push(encodeCoapOption(17 - currentOptionNumber, Uint8Array.from([50])));
+
         return concatBytes.apply(null, parts);
+    }
+
+    function resolveBrowserProfile(profileId, browserVersion) {
+        var normalizedId = Object.prototype.hasOwnProperty.call(BROWSER_PROFILES, profileId) ? profileId : "chrome";
+        var profile = BROWSER_PROFILES[normalizedId] || BROWSER_PROFILES.chrome;
+        var runtime = BROWSER_RUNTIME_PROFILES[normalizedId] || BROWSER_RUNTIME_PROFILES.chrome;
+        var resolvedVersion = String(browserVersion || "").trim();
+
+        if (!resolvedVersion || resolvedVersion.toLowerCase() === "auto") {
+            resolvedVersion = profile.defaultVersion;
+        }
+
+        return {
+            id: normalizedId,
+            tlsStyle: profile.tlsStyle || "chromium",
+            browserVersion: resolvedVersion,
+            majorVersion: parseInt(resolvedVersion.split(".")[0], 10) || parseInt(profile.defaultVersion, 10) || 0,
+            platform: runtime.platform,
+            acceptLanguage: runtime.acceptLanguage,
+            acceptEncoding: runtime.acceptEncoding,
+            websocketExtensions: runtime.websocketExtensions,
+            http2Settings: runtime.http2Settings,
+            includeSecChUa: runtime.secChUaBrands.length > 0,
+            secChUa: buildSecChUa(runtime.secChUaBrands, parseInt(resolvedVersion.split(".")[0], 10) || 0),
+            userAgent: formatBrowserUserAgent(runtime.userAgentTemplate, resolvedVersion),
+            acceptHeader: normalizedId === "safari"
+                ? "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+                : "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8"
+        };
+    }
+
+    function formatBrowserUserAgent(template, version) {
+        return String(template || randomItem(BROWSER_USER_AGENTS)).replace(/\{version\}/g, version);
+    }
+
+    function buildSecChUa(brands, majorVersion) {
+        return (brands || []).map(function (brand) {
+            var version = brand === "Not=A?Brand" ? 99 : (majorVersion || 0);
+            return "\"" + brand + "\";v=\"" + version + "\"";
+        }).join(", ");
+    }
+
+    function buildBrowserRequestHeaders(browser, host, target) {
+        var lines = [
+            "GET " + target + " HTTP/1.1",
+            "Host: " + host
+        ];
+
+        if (browser.includeSecChUa) {
+            lines.push(
+                "Connection: keep-alive",
+                "Cache-Control: max-age=0",
+                "sec-ch-ua: " + browser.secChUa,
+                "sec-ch-ua-mobile: ?0",
+                "sec-ch-ua-platform: \"" + browser.platform + "\"",
+                "Upgrade-Insecure-Requests: 1",
+                "User-Agent: " + browser.userAgent,
+                "Accept: " + browser.acceptHeader,
+                "Sec-Fetch-Site: none",
+                "Sec-Fetch-Mode: navigate",
+                "Sec-Fetch-User: ?1",
+                "Sec-Fetch-Dest: document",
+                "Accept-Encoding: " + browser.acceptEncoding,
+                "Accept-Language: " + browser.acceptLanguage
+            );
+            return lines;
+        }
+
+        lines.push(
+            "User-Agent: " + browser.userAgent,
+            "Accept: " + browser.acceptHeader,
+            "Accept-Language: " + browser.acceptLanguage,
+            "Accept-Encoding: " + browser.acceptEncoding,
+            "Connection: keep-alive",
+            "Upgrade-Insecure-Requests: 1",
+            "Sec-Fetch-Dest: document",
+            "Sec-Fetch-Mode: navigate",
+            "Sec-Fetch-Site: none",
+            "Sec-Fetch-User: ?1"
+        );
+        return lines;
+    }
+
+    function buildBrowserWebsocketRequest(browser, host, path) {
+        var lines = [
+            "GET " + normalizePath(path) + " HTTP/1.1",
+            "Host: " + host,
+            "Connection: Upgrade",
+            "Pragma: no-cache",
+            "Cache-Control: no-cache",
+            "User-Agent: " + browser.userAgent,
+            "Upgrade: websocket",
+            "Origin: https://" + host,
+            "Sec-WebSocket-Version: 13",
+            "Accept-Encoding: " + browser.acceptEncoding,
+            "Accept-Language: " + browser.acceptLanguage,
+            "Sec-WebSocket-Key: " + base64EncodeBytes(randomBytes(16))
+        ];
+
+        if (browser.websocketExtensions) {
+            lines.push("Sec-WebSocket-Extensions: " + browser.websocketExtensions);
+        }
+
+        return lines;
+    }
+
+    function buildHttp2Frame(frameType, flags, streamId, payload) {
+        var body = payload || zeroBytes(0);
+        return concatBytes(
+            u24(body.length),
+            Uint8Array.from([frameType & 0xFF, flags & 0xFF]),
+            u32(streamId & 0x7FFFFFFF),
+            body
+        );
+    }
+
+    function buildHttp2HeadersFrame(host, path, browser) {
+        return buildHttp2Frame(0x01, 0x05, 1, buildHttp2RequestHeaderBlock(host, path, browser));
+    }
+
+    function buildHttp2RequestHeaderBlock(host, path, browser) {
+        var normalizedPath = normalizePath(path);
+        return concatBytes(
+            encodeHpackIndexedHeader(2),
+            encodeHpackIndexedHeader(6),
+            encodeHpackLiteralWithIndexedName(1, encodeText(host)),
+            normalizedPath === "/" ? encodeHpackIndexedHeader(4) : encodeHpackLiteralWithIndexedName(4, encodeText(normalizedPath)),
+            encodeHpackLiteralWithIndexedName(58, encodeText(browser.userAgent)),
+            encodeHpackLiteralWithIndexedName(19, encodeText(browser.acceptHeader)),
+            encodeHpackLiteralWithIndexedName(16, encodeText(browser.acceptEncoding)),
+            encodeHpackLiteralHeader("accept-language", encodeText(browser.acceptLanguage))
+        );
+    }
+
+    function encodeHpackIndexedHeader(index) {
+        return encodeHpackInteger(index, 7, 0x80);
+    }
+
+    function encodeHpackLiteralWithIndexedName(index, valueBytes) {
+        return concatBytes(
+            encodeHpackInteger(index, 4, 0x00),
+            encodeHpackString(valueBytes)
+        );
+    }
+
+    function encodeHpackLiteralHeader(name, valueBytes) {
+        return concatBytes(
+            encodeHpackInteger(0, 4, 0x00),
+            encodeHpackString(encodeText(name)),
+            encodeHpackString(valueBytes)
+        );
+    }
+
+    function encodeHpackInteger(value, prefixBits, prefixMask) {
+        var maxPrefixValue = (1 << prefixBits) - 1;
+        var bytes = [];
+        var remaining = value;
+
+        if (remaining < maxPrefixValue) {
+            return Uint8Array.from([prefixMask | remaining]);
+        }
+
+        bytes.push(prefixMask | maxPrefixValue);
+        remaining -= maxPrefixValue;
+
+        while (remaining >= 128) {
+            bytes.push((remaining % 128) | 0x80);
+            remaining = Math.floor(remaining / 128);
+        }
+
+        bytes.push(remaining);
+        return Uint8Array.from(bytes);
+    }
+
+    function encodeHpackString(valueBytes) {
+        return concatBytes(encodeHpackInteger(valueBytes.length, 7, 0x00), valueBytes);
+    }
+
+    function buildStunAttribute(type, valueBytes) {
+        var padding = (4 - (valueBytes.length % 4)) % 4;
+        return concatBytes(
+            u16(type),
+            u16(valueBytes.length),
+            valueBytes,
+            zeroBytes(padding)
+        );
+    }
+
+    function crc32(bytes) {
+        var crc = 0xFFFFFFFF;
+        var index;
+        var bit;
+
+        for (index = 0; index < bytes.length; index += 1) {
+            crc ^= bytes[index];
+
+            for (bit = 0; bit < 8; bit += 1) {
+                if (crc & 1) {
+                    crc = (crc >>> 1) ^ 0xEDB88320;
+                } else {
+                    crc = crc >>> 1;
+                }
+            }
+        }
+
+        return (~crc) >>> 0;
+    }
+
+    function buildDhcpOption(code, valueBytes) {
+        return concatBytes(Uint8Array.from([code, valueBytes.length]), valueBytes);
+    }
+
+    function buildRadiusAttribute(type, valueBytes) {
+        return concatBytes(Uint8Array.from([type, valueBytes.length + 2]), valueBytes);
+    }
+
+    function encodeNtpTimestamp(date) {
+        var ms = date instanceof Date ? date.getTime() : Date.now();
+        var seconds = Math.floor(ms / 1000) + 2208988800;
+        var fraction = Math.floor(((ms % 1000) / 1000) * 0x100000000) >>> 0;
+        return concatBytes(u32(seconds >>> 0), u32(fraction));
+    }
+
+    function buildKeyShareValue(group) {
+        if (group === 0x0017) {
+            return concatBytes(Uint8Array.from([0x04]), randomBytes(64));
+        }
+
+        if (group === 0x0018) {
+            return concatBytes(Uint8Array.from([0x04]), randomBytes(96));
+        }
+
+        return randomBytes(32);
+    }
+
+    function calculateTlsPaddingLength(parts, targetSize) {
+        var currentLength = 0;
+
+        if (!targetSize) {
+            return 0;
+        }
+
+        parts.forEach(function (part) {
+            currentLength += part.length;
+        });
+
+        return Math.max(0, targetSize - (4 + 2 + 32 + 1 + 32 + 2 + 32 + 2 + 2) - currentLength - 4);
+    }
+
+    function encodeCipherSuites(cipherSuites, greaseValue) {
+        var parts = [];
+
+        if (Number.isFinite(greaseValue)) {
+            parts.push(u16(greaseValue));
+        }
+
+        (cipherSuites || []).forEach(function (cipherSuite) {
+            parts.push(u16(cipherSuite));
+        });
+
+        return concatBytes.apply(null, parts);
+    }
+
+    function resolveTlsFingerprint(browser, isQuic) {
+        var defaultSignatureAlgorithms = [0x0403, 0x0804, 0x0401, 0x0503, 0x0805, 0x0501, 0x0806, 0x0601, 0x0807];
+        var chromiumFingerprint = {
+            useGrease: true,
+            useSecondaryGrease: true,
+            cipherSuites: isQuic
+                ? [0x1301, 0x1302, 0x1303]
+                : [0x1301, 0x1302, 0x1303, 0xC02B, 0xC02F, 0xC02C, 0xC030, 0xCCA9, 0xCCA8, 0xC013, 0xC014, 0x009C, 0x009D, 0x002F, 0x0035],
+            extensionOrder: isQuic
+                ? ["grease", "sni", "supported_groups", "alpn", "status_request", "signature_algorithms", "sct", "supported_versions", "key_share", "psk_modes", "quic_transport_parameters", "compress_certificate", "secondary_grease", "padding"]
+                : ["grease", "sni", "extended_master_secret", "renegotiation_info", "supported_groups", "ec_point_formats", "session_ticket", "alpn", "status_request", "signature_algorithms", "sct", "supported_versions", "key_share", "psk_modes", "compress_certificate", "application_settings", "secondary_grease", "padding"],
+            supportedGroups: [0x001D, 0x0017, 0x0018],
+            signatureAlgorithms: defaultSignatureAlgorithms,
+            supportedVersions: isQuic ? [0x0304] : [0x0304, 0x0303],
+            keyShares: [0x001D],
+            compressCertificateAlgorithms: [0x0002],
+            includeApplicationSettings: true,
+            paddingTarget: 512,
+            maxUdpPayloadSize: 1472,
+            activeConnectionIdLimit: 8
+        };
+
+        if (browser.tlsStyle === "firefox") {
+            return {
+                useGrease: false,
+                useSecondaryGrease: false,
+                cipherSuites: isQuic
+                    ? [0x1301, 0x1303, 0x1302]
+                    : [0x1301, 0x1303, 0x1302, 0xC02B, 0xC02F, 0xCCA9, 0xCCA8, 0xC02C, 0xC030, 0x009C, 0x009D, 0x002F, 0x0035],
+                extensionOrder: isQuic
+                    ? ["sni", "supported_groups", "alpn", "signature_algorithms", "supported_versions", "key_share", "psk_modes", "quic_transport_parameters", "padding"]
+                    : ["sni", "extended_master_secret", "renegotiation_info", "supported_groups", "ec_point_formats", "session_ticket", "alpn", "status_request", "signature_algorithms", "supported_versions", "key_share", "psk_modes", "compress_certificate", "padding"],
+                supportedGroups: [0x001D, 0x0017, 0x0018, 0x0019],
+                signatureAlgorithms: [0x0807, 0x0403, 0x0804, 0x0401, 0x0503, 0x0805, 0x0501, 0x0806, 0x0601],
+                supportedVersions: isQuic ? [0x0304] : [0x0304, 0x0303],
+                keyShares: [0x001D, 0x0017],
+                compressCertificateAlgorithms: [0x0002],
+                includeApplicationSettings: false,
+                paddingTarget: 480,
+                maxUdpPayloadSize: 1452,
+                activeConnectionIdLimit: 4
+            };
+        }
+
+        if (browser.tlsStyle === "safari") {
+            return {
+                useGrease: false,
+                useSecondaryGrease: false,
+                cipherSuites: isQuic
+                    ? [0x1301, 0x1302, 0x1303]
+                    : [0x1301, 0x1302, 0x1303, 0xC02C, 0xC02B, 0xCCA9, 0xC02F, 0xC030, 0x009C, 0x009D],
+                extensionOrder: isQuic
+                    ? ["sni", "supported_groups", "alpn", "signature_algorithms", "supported_versions", "key_share", "psk_modes", "quic_transport_parameters"]
+                    : ["sni", "supported_groups", "ec_point_formats", "signature_algorithms", "alpn", "status_request", "supported_versions", "key_share", "psk_modes", "session_ticket"],
+                supportedGroups: [0x001D, 0x0017, 0x0018],
+                signatureAlgorithms: defaultSignatureAlgorithms,
+                supportedVersions: isQuic ? [0x0304] : [0x0304, 0x0303],
+                keyShares: [0x001D, 0x0017],
+                compressCertificateAlgorithms: [],
+                includeApplicationSettings: false,
+                paddingTarget: 0,
+                maxUdpPayloadSize: 1452,
+                activeConnectionIdLimit: 4
+            };
+        }
+
+        return chromiumFingerprint;
+    }
+
+    function buildUseSrtpExtension() {
+        var profiles = concatBytes(u16(2), u16(0x0001), Uint8Array.from([0x00]));
+        return concatBytes(u16(0x000E), u16(profiles.length), profiles);
+    }
+
+    function splitPathAndQuery(path) {
+        var normalized = normalizePath(path);
+        var queryIndex = normalized.indexOf("?");
+        var pathname = queryIndex === -1 ? normalized : normalized.slice(0, queryIndex);
+        var query = queryIndex === -1 ? "" : normalized.slice(queryIndex + 1);
+
+        return {
+            segments: pathname.split("/").filter(function (segment) {
+                return segment.length > 0;
+            }),
+            query: query ? query.split("&").filter(function (segment) { return segment.length > 0; }) : []
+        };
     }
 
     function encodeCoapOption(delta, valueBytes) {
@@ -1154,9 +1681,7 @@
     }
 
     function splitPathSegments(path) {
-        return normalizePath(path).split("/").filter(function (segment) {
-            return segment.length > 0;
-        });
+        return splitPathAndQuery(path).segments;
     }
 
     function encodeLengthPrefixedText(text) {
@@ -1201,9 +1726,9 @@
         return Uint8Array.from(bytes);
     }
 
-    function encodeNbnsName(host) {
+    function encodeNbnsName(host, suffix) {
         var label = normalizeHost(host).split(".")[0].toUpperCase().replace(/[^A-Z0-9!@#$%^&()\-_'{}.~]/g, "");
-        var sixteenByteName = (label.slice(0, 15) + "               ").slice(0, 15) + "\u0000";
+        var sixteenByteName = (label.slice(0, 15) + "               ").slice(0, 15) + String.fromCharCode((suffix || 0) & 0xFF);
         var bytes = [32];
         var index;
 
