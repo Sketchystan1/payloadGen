@@ -69,7 +69,6 @@
         error: "status-error",
         info: "status-info"
     };
-    var HOST_RANDOM_RU_KEY = "__hostRandomRu";
     var CATEGORY_MAP = Generators.helpers.createMapById(CATEGORY_DEFS);
     var PROTOCOL_MAP = Generators.helpers.createMapById(PROTOCOL_CATALOG);
     var bytesToHex = Generators.helpers.bytesToHex;
@@ -200,8 +199,7 @@
 
     function applyRandomRankedDomainToBlock(block) {
         var protocol = getProtocolMeta(block._state.protocolId);
-        var useRussianRanking = !!block._state.values[HOST_RANDOM_RU_KEY];
-        var pool = getRankedDomainPool(useRussianRanking);
+        var pool = getRankedDomainPool();
         var domain;
 
         if (!protocolUsesField(protocol, "host")) {
@@ -217,7 +215,7 @@
         setStatus("randomDomainApplied", "info", {
             count: 1,
             domain: domain,
-            ranking: useRussianRanking ? t("rankingRu") : t("rankingGlobal")
+            ranking: t("rankingRu")
         });
     }
 
@@ -240,9 +238,7 @@
     }
 
     function createDefaultBlockValues() {
-        var defaults = {};
-        defaults[HOST_RANDOM_RU_KEY] = true;
-        return defaults;
+        return {};
     }
 
     function mergeDefaultBlockValues(values) {
@@ -416,8 +412,24 @@
 
         clearElement(refs.dynamicFields);
 
-        protocol.fieldSet.forEach(function (fieldId) {
+        getRenderableProtocolFieldIds(protocol).forEach(function (fieldId) {
             refs.dynamicFields.appendChild(createDynamicField(block, protocol, fieldId));
+        });
+    }
+
+    function getProtocolOptionFieldIds(protocol) {
+        var fieldIds = protocol.fieldSet.slice();
+
+        if (protocol.id !== "quic") {
+            fieldIds.push("awgSplitMode");
+        }
+
+        return fieldIds;
+    }
+
+    function getRenderableProtocolFieldIds(protocol) {
+        return getProtocolOptionFieldIds(protocol).filter(function (fieldId) {
+            return !(protocol.id === "quic" && fieldId === "quicEncrypt");
         });
     }
 
@@ -495,11 +507,6 @@
             autocomplete: "off"
         });
         var randomButton = createTranslatableButton("randomHostButton", "btn btn-ghost");
-        var ruCheckbox = createElement("input", { type: "checkbox" });
-        var ruLabel = createElement("span", {
-            className: "checkbox-label",
-            textContent: t("randomHostRuLabel")
-        });
 
         input.spellcheck = !!FIELD_DEFS.host.spellcheck;
         input.value = String(value);
@@ -512,25 +519,13 @@
             applyRandomRankedDomainToBlock(block);
         });
 
-        ruCheckbox.checked = !!block._state.values[HOST_RANDOM_RU_KEY];
-        ruCheckbox.addEventListener("change", function () {
-            setFieldValue(block, HOST_RANDOM_RU_KEY, ruCheckbox.checked);
-            clearBlockError(block);
-        });
-
         return createField("hostLabel", createElement("div", {
             className: "host-field-row",
             children: [
                 input,
                 createElement("div", {
                     className: "host-field-actions",
-                    children: [
-                        randomButton,
-                        createElement("label", {
-                            className: "inline-checkbox",
-                            children: [ruCheckbox, ruLabel]
-                        })
-                    ]
+                    children: [randomButton]
                 })
             ]
         }), "field");
@@ -613,7 +608,10 @@
 
     function updateBlockUi() {
         getBlocks().forEach(function (block, index) {
-            getBlockRefs(block).title.textContent = t("payloadBlockTitle") + " (i" + (index + 1) + ")";
+            var refs = getBlockRefs(block);
+
+            refs.title.textContent = t("payloadBlockTitle") + " (i" + (index + 1) + ")";
+            refs.removeButton.hidden = index === 0;
         });
 
         dom.addButton.disabled = getBlockCount() >= CONFIG.maxBlocks;
@@ -710,33 +708,24 @@
 
     function appendBlockLines(lines, block, mtu, padMtu) {
         var options = collectProtocolOptions(block);
+        var protocolId = block._state.protocolId;
 
-        if (block._state.protocolId === "quic" && options.quicAwgSegmented) {
+        if (protocolId === "quic" && isSplitModeEnabled(options.quicAwgLevel)) {
             throw new Error("AWG segmented QUIC output requires async generation.");
         }
 
-        var payloadBytes = generatePayload(block._state.protocolId, options);
+        var payloadBytes = generatePayload(protocolId, options);
         var chunks = chunkPayload(payloadBytes, mtu, padMtu);
-        var wasCapped = false;
-        var index;
 
-        for (index = 0; index < chunks.length; index += 1) {
-            if (lines.length >= CONFIG.maxOutputLines) {
-                wasCapped = true;
-                break;
-            }
-
-            lines.push(formatOutputLine(lines.length + 1, chunks[index]));
-        }
-
-        return wasCapped;
+        return appendChunkLines(lines, chunks, protocolId, options);
     }
 
     async function appendBlockLinesAsync(lines, block, mtu, padMtu) {
         var options = collectProtocolOptions(block);
+        var protocolId = block._state.protocolId;
         var payloadBytes;
 
-        if (block._state.protocolId === "quic" && options.quicAwgSegmented) {
+        if (protocolId === "quic" && isSplitModeEnabled(options.quicAwgLevel)) {
             if (lines.length >= CONFIG.maxOutputLines) {
                 return true;
             }
@@ -766,33 +755,22 @@
 
         // Use async generator for protocols that support it
         if (typeof Generators.generatePayloadAsync === "function" && 
-            (block._state.protocolId === "quic" && shouldUseAsyncQuicOutput(options))) {
-            payloadBytes = await Generators.generatePayloadAsync(block._state.protocolId, options);
+            (protocolId === "quic" && shouldUseAsyncQuicOutput(options))) {
+            payloadBytes = await Generators.generatePayloadAsync(protocolId, options);
         } else {
-            payloadBytes = generatePayload(block._state.protocolId, options);
+            payloadBytes = generatePayload(protocolId, options);
         }
 
         var chunks = chunkPayload(payloadBytes, mtu, padMtu);
-        var wasCapped = false;
-        var index;
 
-        for (index = 0; index < chunks.length; index += 1) {
-            if (lines.length >= CONFIG.maxOutputLines) {
-                wasCapped = true;
-                break;
-            }
-
-            lines.push(formatOutputLine(lines.length + 1, chunks[index]));
-        }
-
-        return wasCapped;
+        return appendChunkLines(lines, chunks, protocolId, options);
     }
 
     function collectProtocolOptions(block) {
         var protocol = getProtocolMeta(block._state.protocolId);
         var options = {};
 
-        protocol.fieldSet.forEach(function (fieldId) {
+        getProtocolOptionFieldIds(protocol).forEach(function (fieldId) {
             var value = getResolvedOptionValue(block, protocol, fieldId);
 
             if (fieldId === "host") {
@@ -817,7 +795,40 @@
             options.browserVersion = getBrowserDefaultVersion(options.browserProfile);
         }
 
+        if (protocol.id === "quic") {
+            options.quicEncrypt = true;
+            options.quicVersion = String(options.quicVersion || "v1");
+        }
+
         return options;
+    }
+
+    function appendChunkLines(lines, chunks, protocolId, options) {
+        var wasCapped = false;
+        var index;
+
+        for (index = 0; index < chunks.length; index += 1) {
+            if (lines.length >= CONFIG.maxOutputLines) {
+                wasCapped = true;
+                break;
+            }
+
+            lines.push(formatChunkLine(lines.length + 1, chunks[index], protocolId, options));
+        }
+
+        return wasCapped;
+    }
+
+    function formatChunkLine(lineNumber, chunk, protocolId, options) {
+        if (shouldUseGenericSplitOutput(protocolId, options)) {
+            return formatOutputExpressionLine(lineNumber, formatGenericSplitExpression(chunk, options.awgSplitMode));
+        }
+
+        return formatOutputLine(lineNumber, chunk);
+    }
+
+    function shouldUseGenericSplitOutput(protocolId, options) {
+        return protocolId !== "quic" && !!(options && isSplitModeEnabled(options.awgSplitMode));
     }
 
     function getResolvedOptionValue(block, protocol, fieldId) {
@@ -1059,8 +1070,109 @@
         return new Array(Math.max(0, count) + 1).join(String(hexByte || ""));
     }
 
+    function normalizeSplitMode(level) {
+        var normalized = String(level == null ? "" : level).trim().toLowerCase();
+
+        if (!normalized || normalized === "off") {
+            return null;
+        }
+
+        if (normalized === "0" || normalized === "1" || normalized === "2" || normalized === "3" || normalized === "4") {
+            return normalized;
+        }
+
+        return "0";
+    }
+
+    function isSplitModeEnabled(level) {
+        return normalizeSplitMode(level) !== null;
+    }
+
     function shouldUseAsyncQuicOutput(options) {
-        return !!(options && (options.quicEncrypt || options.quicAwgSegmented));
+        return !!(options && (options.quicEncrypt || isSplitModeEnabled(options.quicAwgLevel)));
+    }
+
+    function formatGenericSplitExpression(bytes, level) {
+        var normalized = normalizeSplitMode(level);
+        var length = bytes.length;
+        var prefixEnd;
+        var hiddenEnd;
+        var suffixStart;
+
+        if (normalized == null || length === 0) {
+            return "<b 0x" + bytesToHex(bytes) + ">";
+        }
+
+        if (normalized === "0") {
+            prefixEnd = Math.min(length, Math.max(1, Math.min(8, length)));
+            hiddenEnd = Math.min(length, prefixEnd + Math.max(1, Math.min(16, length - prefixEnd)));
+            return buildSplitExpression(bytes, [
+                { visible: true, start: 0, end: prefixEnd },
+                { visible: false, start: prefixEnd, end: hiddenEnd },
+                { visible: true, start: hiddenEnd, end: length }
+            ]);
+        }
+
+        if (normalized === "1") {
+            prefixEnd = Math.min(length, Math.max(1, Math.floor(length / 3)));
+            hiddenEnd = Math.min(length, prefixEnd + Math.max(1, Math.floor(length / 3)));
+            return buildSplitExpression(bytes, [
+                { visible: true, start: 0, end: prefixEnd },
+                { visible: false, start: prefixEnd, end: hiddenEnd },
+                { visible: true, start: hiddenEnd, end: length }
+            ]);
+        }
+
+        if (normalized === "2") {
+            prefixEnd = Math.min(length, Math.max(1, Math.floor(length / 4)));
+            hiddenEnd = Math.min(length, prefixEnd + Math.max(1, Math.floor(length / 2)));
+            return buildSplitExpression(bytes, [
+                { visible: true, start: 0, end: prefixEnd },
+                { visible: false, start: prefixEnd, end: hiddenEnd },
+                { visible: true, start: hiddenEnd, end: length }
+            ]);
+        }
+
+        if (normalized === "3") {
+            return buildSplitExpression(bytes, [
+                { visible: true, start: 0, end: Math.min(1, length) },
+                { visible: false, start: Math.min(1, length), end: length }
+            ]);
+        }
+
+        suffixStart = Math.max(1, length - Math.min(8, Math.max(0, length - 1)));
+
+        while (suffixStart < length && bytes[suffixStart] === 0) {
+            suffixStart += 1;
+        }
+
+        return buildSplitExpression(bytes, [
+            { visible: true, start: 0, end: Math.min(1, length) },
+            { visible: false, start: Math.min(1, length), end: Math.min(suffixStart, length) },
+            { visible: true, start: Math.min(suffixStart, length), end: length }
+        ]);
+    }
+
+    function buildSplitExpression(bytes, segments) {
+        var expression = "";
+
+        segments.forEach(function (segment) {
+            var start = Math.max(0, segment.start);
+            var end = Math.max(start, Math.min(bytes.length, segment.end));
+
+            if (end <= start) {
+                return;
+            }
+
+            if (segment.visible) {
+                expression += "<b 0x" + bytesToHex(bytes.slice(start, end)) + ">";
+                return;
+            }
+
+            expression += "<r " + (end - start) + ">";
+        });
+
+        return expression || "<b 0x" + bytesToHex(bytes) + ">";
     }
 
     function t(key) {
@@ -1160,8 +1272,8 @@
         return protocol.fieldSet.indexOf(fieldId) !== -1;
     }
 
-    function getRankedDomainPool(useRussianRanking) {
-        return useRussianRanking ? DOMAIN_SNAPSHOTS.ru : DOMAIN_SNAPSHOTS.global;
+    function getRankedDomainPool() {
+        return DOMAIN_SNAPSHOTS.ru;
     }
 
     function pickWeightedRankedDomain(domains) {

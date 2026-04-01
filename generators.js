@@ -279,13 +279,28 @@
         return concatBytes(headerForAad, encrypted);
     }
 
+    function normalizeQuicAwgLevel(level) {
+        var normalized = String(level == null ? "" : level).trim().toLowerCase();
+
+        if (!normalized || normalized === "off") {
+            return null;
+        }
+
+        var cutLevel = parseInt(normalized, 10);
+        return Number.isFinite(cutLevel) && cutLevel >= 0 ? cutLevel : 0;
+    }
+
     function buildQuicAwgPayload(clientHello, level) {
-        var cutLevel = parseInt(level, 10);
+        var cutLevel = normalizeQuicAwgLevel(level);
         var payload;
         var cutSettings;
         var clientHelloBytes = clientHello instanceof Uint8Array ? clientHello : new Uint8Array(clientHello);
 
-        if (!cutLevel) {
+        if (cutLevel == null) {
+            throw new Error("AWG segmented QUIC output is disabled for this payload.");
+        }
+
+        if (cutLevel === 0) {
             payload = buildQuicCryptoFrame(clientHelloBytes, 0);
             var dataOffset = payload.length - clientHelloBytes.length;
             cutSettings = [dataOffset + 6, 32, clientHelloBytes.length - 38, 16];
