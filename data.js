@@ -123,29 +123,16 @@
         edge: { defaultVersion: "146.0.3856.84", tlsStyle: "edge" }
     };
 
-    // Static popularity snapshots prepared on 2026-04-01 from ahrefstop.com
-    // and filtered against the publicly mirrored zapret-info/z-i dump snapshot.
+    // Static popularity snapshots from ahrefstop.com
     var DOMAIN_SNAPSHOTS = {
-        global: [
-            "wikipedia.org", "chatgpt.com", "google.com", "reddit.com", "whatsapp.com", "pinterest.com", "apple.com", "amazon.com", "tiktok.com", "imdb.com",
-            "x.com", "microsoft.com", "yahoo.com", "globo.com", "nytimes.com", "fandom.com", "yahoo.co.jp", "mayoclinic.org", "ilovepdf.com", "netflix.com",
-            "clevelandclinic.org", "openai.com", "spotify.com", "roblox.com", "espn.com", "bbc.co.uk", "adobe.com", "indeed.com", "amazon.in", "cricbuzz.com",
-            "espncricinfo.com", "nih.gov", "ikea.com", "poki.com", "investing.com", "flipkart.com", "yelp.com", "rakuten.co.jp", "scribd.com", "amazon.de",
-            "trendyol.com", "uol.com.br", "samsung.com", "steampowered.com", "nhs.uk", "mercadolivre.com.br", "accuweather.com", "booking.com", "wise.com", "amazon.co.uk",
-            "gov.uk", "live.com", "amazon.co.jp", "tripadvisor.com", "medlineplus.gov", "detik.com", "merriam-webster.com", "tradingview.com", "alodokter.com", "walmart.com",
-            "freepik.com", "hurriyet.com.tr", "cookpad.com", "savefrom.net", "yandex.com.tr", "auburn.edu", "namu.wiki", "primevideo.com", "ebay.com", "smallpdf.com",
-            "sahibinden.com", "365scores.com", "discord.com", "1mg.com", "nike.com", "healthline.com", "rottentomatoes.com", "weather.com", "shopee.co.id", "yandex.ru",
-            "speedtest.net", "etsy.com", "epfindia.gov.in", "thethaovanhoa.vn", "icc-cricket.com", "tff.org", "wayground.com", "nta.go.jp", "saude.gov.br", "formula1.com",
-            "perplexity.ai", "todamateria.com.br", "borsaitaliana.it", "livemint.com", "telangana.gov.in", "estadao.com.br", "pro-football-reference.com", "turkiye.gov.tr", "indianexpress.com", "currys.co.uk"
-        ],
         ru: [
             "wikipedia.org", "yandex.ru", "ozon.ru", "vk.com", "google.com", "gismeteo.ru", "mail.ru", "kinopoisk.ru", "pinterest.com", "dzen.ru",
             "rutube.ru", "gdz.ru", "apple.com", "rbc.ru", "reddit.com", "wildberries.ru", "asna.ru", "ya.ru", "vidal.ru", "banki.ru",
             "sberbank.ru", "ria.ru", "tbank.ru", "championat.com", "fandom.com", "rambler.ru", "kp.ru", "dns-shop.ru", "russianfood.com", "eapteka.ru",
-            "chatgpt.com", "avito.ru", "2gis.ru", "roblox.com", "telegram.org", "cbr.ru", "ivi.ru", "gosuslugi.ru", "yandex.kz", "pozdravok.com",
+            "chatgpt.com", "avito.ru", "2gis.ru", "cbr.ru", "ivi.ru", "gosuslugi.ru", "pozdravok.com",
             "microsoft.com", "kino-teatr.ru", "consultant.ru", "lenta.ru", "auto.ru", "smclinic.ru", "steampowered.com", "funpay.com", "rustore.ru", "okko.tv",
-            "domclick.ru", "sports.ru", "t.me", "cian.ru", "drom.ru", "investing.com", "whatsapp.com", "gastronom.ru", "24smi.org", "sravni.ru",
-            "tiktok.com", "iamcook.ru", "vseinstrumenti.ru", "planetazdorovo.ru", "wiktionary.org", "soccer365.ru", "aviasales.ru", "proxifier.com", "sovcombank.ru", "irecommend.ru",
+            "domclick.ru", "sports.ru", "cian.ru", "drom.ru", "investing.com", "gastronom.ru", "24smi.org", "sravni.ru",
+            "iamcook.ru", "vseinstrumenti.ru", "planetazdorovo.ru", "wiktionary.org", "soccer365.ru", "aviasales.ru", "sovcombank.ru", "irecommend.ru",
             "sportbox.ru", "freepik.com", "gemotest.ru", "invitro.ru", "github.com", "tutu.ru", "skysmart.ru", "vtb.ru", "goldapple.ru", "ok.ru",
             "kareliameteo.ru", "pikabu.ru", "deepl.com", "meteoinfo.ru", "tripadvisor.ru", "iz.ru", "megapteka.ru", "apteka.ru", "reverso.net", "hh.ru",
             "primpogoda.ru", "habr.com", "gdz-raketa.ru", "uchi.ru", "lamoda.ru", "deti-online.com", "promokodi.net", "gorzdrav.org", "uiscom.ru", "primbank.ru"
