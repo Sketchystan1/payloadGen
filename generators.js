@@ -23,7 +23,6 @@
 
     var CONFIG = Data.CONFIG;
     var CHROME_BROWSER_DATA = Data.CHROME_BROWSER_DATA;
-    var CURL_USER_AGENTS = Data.CURL_USER_AGENTS;
     var SSDP_SEARCH_TARGETS = Data.SSDP_SEARCH_TARGETS;
     var LATEST_QUIC_VERSION = Data.LATEST_QUIC_VERSION;
     var DNS_QUERY_TYPES = [0x0001, 0x001C, 0x0041];
@@ -73,7 +72,11 @@
         ]
     };
     var QUIC_VERSION_DEF = { wireValue: LATEST_QUIC_VERSION, initialHeaderBase: 0xC0 };
+    var CURL_QUIC_PROFILE_ID = "curl_h3";
+    var CURL_QUIC_ECH_DOH_URL = "https://dns.google/resolve";
+    var ECH_CONFIG_CACHE = {};
     var textEncoder = createTextEncoder();
+    var textDecoder = createTextDecoder();
     var hasCrypto = !!Crypto;
 
     function generatePayload(protocolId, options) {
@@ -176,8 +179,17 @@
             alpnProtocol: "h3",
             browserVersion: options.browserVersion,
             withQuicTransportParameters: true,
-            quicSourceConnectionId: scid
+            quicSourceConnectionId: scid,
+            tlsFingerprintProfile: options.tlsFingerprintProfile
         });
+    }
+
+    async function buildQuicClientHelloAsync(host, options, scid) {
+        if (options && options.echConfig) {
+            return await buildDynamicEchQuicClientHello(host, options, scid);
+        }
+
+        return buildQuicClientHello(host, options, scid);
     }
 
     function buildQuicCryptoFrame(data, offset) {
@@ -191,10 +203,15 @@
     }
 
     function resolveQuicTargetPacketSize(options) {
+        var targetPacketSize = options ? Number(options.quicTargetPacketSize) : NaN;
         var mtu = options ? Number(options.quicMtu) : NaN;
 
         if (options && options.quicPadToMtu && Number.isFinite(mtu) && mtu > 0) {
             return Math.max(1200, Math.floor(mtu));
+        }
+
+        if (Number.isFinite(targetPacketSize) && targetPacketSize > 0) {
+            return Math.max(1200, Math.floor(targetPacketSize));
         }
 
         return 1200;
@@ -286,12 +303,346 @@
         return concatBytes(headerForAad, encrypted);
     }
 
+    function withCapturedCurlQuicProfile(options) {
+        var merged = cloneOptions(options);
+
+        if (!merged.tlsFingerprintProfile) {
+            merged.tlsFingerprintProfile = CURL_QUIC_PROFILE_ID;
+        }
+
+        if (!Number.isFinite(Number(merged.quicScidLength))) {
+            merged.quicScidLength = 0;
+        }
+
+        if (!Number.isFinite(Number(merged.quicTargetPacketSize))) {
+            merged.quicTargetPacketSize = 1250;
+        }
+
+        if (!merged.quicPacketNumber) {
+            merged.quicPacketNumber = Uint8Array.from([0x00]);
+        }
+
+        return merged;
+    }
+
+    async function resolveCurlQuicOptionsAsync(options) {
+        var merged = withCapturedCurlQuicProfile(options);
+
+        if (!hasCrypto ||
+            !Crypto ||
+            typeof Crypto.hpkeSetupBaseSender !== "function" ||
+            typeof Crypto.hpkeSeal !== "function" ||
+            typeof Crypto.generateX25519PublicKey !== "function") {
+            return merged;
+        }
+
+        merged.echConfig = await resolveEchConfigForHost(normalizeHost(merged.host));
+        return merged;
+    }
+
+    async function resolveEchConfigForHost(host) {
+        var normalizedHost = normalizeHost(host).toLowerCase();
+
+        if (!ECH_CONFIG_CACHE[normalizedHost]) {
+            ECH_CONFIG_CACHE[normalizedHost] = loadEchConfigForHost(normalizedHost).catch(function (error) {
+                delete ECH_CONFIG_CACHE[normalizedHost];
+                throw error;
+            });
+        }
+
+        return await ECH_CONFIG_CACHE[normalizedHost];
+    }
+
+    async function loadEchConfigForHost(host) {
+        if (typeof fetch === "function") {
+            try {
+                var publishedConfig = await fetchPublishedEchConfig(host);
+
+                if (publishedConfig) {
+                    return publishedConfig;
+                }
+            } catch (error) {
+                console.warn("ECH config lookup failed for", host, error);
+            }
+        }
+
+        return await createSyntheticEchConfig(host);
+    }
+
+    async function fetchPublishedEchConfig(host) {
+        var response = await fetch(
+            CURL_QUIC_ECH_DOH_URL + "?name=" + encodeURIComponent(host) + "&type=HTTPS",
+            {
+                cache: "no-store",
+                headers: { accept: "application/dns-json" }
+            }
+        );
+        var payload;
+
+        if (!response || !response.ok) {
+            return null;
+        }
+
+        payload = await response.json();
+        return extractPublishedEchConfig(payload);
+    }
+
+    function extractPublishedEchConfig(payload) {
+        var answers = payload && payload.Answer ? payload.Answer : [];
+        var index;
+
+        for (index = 0; index < answers.length; index += 1) {
+            var echBase64 = extractEchParamValue(answers[index] && answers[index].data);
+            var configList;
+            var config;
+
+            if (!echBase64) {
+                continue;
+            }
+
+            configList = parseEchConfigList(base64DecodeBytes(echBase64));
+            config = selectSupportedEchConfig(configList);
+
+            if (config) {
+                return config;
+            }
+        }
+
+        return null;
+    }
+
+    function extractEchParamValue(recordData) {
+        var match = /\bech="?([^"\s]+)"?/i.exec(String(recordData || ""));
+        return match ? match[1] : "";
+    }
+
+    function parseEchConfigList(configListBytes) {
+        var bytes = Uint8Array.from(configListBytes || []);
+        var totalLength;
+        var end;
+        var offset = 2;
+        var configs = [];
+
+        if (bytes.length < 2) {
+            return configs;
+        }
+
+        totalLength = readU16(bytes, 0);
+        end = Math.min(bytes.length, 2 + totalLength);
+
+        while (offset + 4 <= end) {
+            var configStart = offset;
+            var version = readU16(bytes, offset);
+            var contentLength = readU16(bytes, offset + 2);
+            var contentStart = offset + 4;
+            var contentEnd = contentStart + contentLength;
+
+            if (contentEnd > end) {
+                break;
+            }
+
+            if (version === 0xFE0D) {
+                var config = parseEchConfig(bytes, configStart, contentStart, contentEnd);
+
+                if (config) {
+                    configs.push(config);
+                }
+            }
+
+            offset = contentEnd;
+        }
+
+        return configs;
+    }
+
+    function parseEchConfig(bytes, configStart, contentStart, contentEnd) {
+        var offset = contentStart;
+        var publicKeyLength;
+        var publicKey;
+        var cipherSuitesLength;
+        var suiteEnd;
+        var cipherSuites = [];
+        var maximumNameLength;
+        var publicNameLength;
+        var publicName;
+        var selectedCipherSuite;
+
+        if (offset + 1 + 2 + 2 > contentEnd) {
+            return null;
+        }
+
+        var configId = bytes[offset];
+        offset += 1;
+        var kemId = readU16(bytes, offset);
+        offset += 2;
+        publicKeyLength = readU16(bytes, offset);
+        offset += 2;
+
+        if (offset + publicKeyLength > contentEnd) {
+            return null;
+        }
+
+        publicKey = bytes.slice(offset, offset + publicKeyLength);
+        offset += publicKeyLength;
+        cipherSuitesLength = readU16(bytes, offset);
+        offset += 2;
+        suiteEnd = offset + cipherSuitesLength;
+
+        if (suiteEnd > contentEnd) {
+            return null;
+        }
+
+        while (offset + 4 <= suiteEnd) {
+            cipherSuites.push({
+                kdfId: readU16(bytes, offset),
+                aeadId: readU16(bytes, offset + 2)
+            });
+            offset += 4;
+        }
+
+        if (offset + 2 > contentEnd) {
+            return null;
+        }
+
+        maximumNameLength = bytes[offset];
+        offset += 1;
+        publicNameLength = bytes[offset];
+        offset += 1;
+
+        if (offset + publicNameLength > contentEnd) {
+            return null;
+        }
+
+        publicName = decodeText(bytes.slice(offset, offset + publicNameLength));
+        selectedCipherSuite = selectSupportedCipherSuite(cipherSuites);
+
+        if (!selectedCipherSuite) {
+            return null;
+        }
+
+        return {
+            configId: configId,
+            kemId: kemId,
+            kdfId: selectedCipherSuite.kdfId,
+            aeadId: selectedCipherSuite.aeadId,
+            publicKey: publicKey,
+            maximumNameLength: maximumNameLength,
+            publicName: publicName || "",
+            rawBytes: bytes.slice(configStart, contentEnd)
+        };
+    }
+
+    function selectSupportedEchConfig(configs) {
+        return (configs || []).find(function (config) {
+            return config &&
+                config.kemId === 0x0020 &&
+                config.kdfId === 0x0001 &&
+                (config.aeadId === 0x0001 || config.aeadId === 0x0002);
+        }) || null;
+    }
+
+    function selectSupportedCipherSuite(cipherSuites) {
+        return (cipherSuites || []).find(function (cipherSuite) {
+            return cipherSuite &&
+                cipherSuite.kdfId === 0x0001 &&
+                (cipherSuite.aeadId === 0x0001 || cipherSuite.aeadId === 0x0002);
+        }) || null;
+    }
+
+    async function createSyntheticEchConfig(host) {
+        var normalizedHost = normalizeHost(host);
+        var publicKey = await Crypto.generateX25519PublicKey();
+        return buildEchConfigDescriptor({
+            configId: randomBytes(1)[0],
+            kemId: 0x0020,
+            publicKey: publicKey,
+            maximumNameLength: Math.min(255, normalizedHost.length),
+            publicName: normalizedHost,
+            cipherSuites: [{ kdfId: 0x0001, aeadId: 0x0001 }]
+        });
+    }
+
+    function buildEchConfigDescriptor(definition) {
+        var normalizedPublicKey = Uint8Array.from(definition.publicKey || []);
+        var normalizedPublicName = normalizeHost(definition.publicName || "");
+        var cipherSuites = (definition.cipherSuites || [{ kdfId: 0x0001, aeadId: 0x0001 }]).map(function (cipherSuite) {
+            return { kdfId: cipherSuite.kdfId, aeadId: cipherSuite.aeadId };
+        });
+        var selectedCipherSuite = selectSupportedCipherSuite(cipherSuites) || { kdfId: 0x0001, aeadId: 0x0001 };
+        var rawBytes = serializeEchConfig({
+            configId: definition.configId,
+            kemId: definition.kemId,
+            publicKey: normalizedPublicKey,
+            maximumNameLength: definition.maximumNameLength,
+            publicName: normalizedPublicName,
+            cipherSuites: cipherSuites
+        });
+
+        return {
+            configId: definition.configId,
+            kemId: definition.kemId,
+            kdfId: selectedCipherSuite.kdfId,
+            aeadId: selectedCipherSuite.aeadId,
+            publicKey: normalizedPublicKey,
+            maximumNameLength: definition.maximumNameLength,
+            publicName: normalizedPublicName,
+            rawBytes: rawBytes
+        };
+    }
+
+    function serializeEchConfig(definition) {
+        var publicKey = Uint8Array.from(definition.publicKey || []);
+        var publicNameBytes = encodeText(normalizeHost(definition.publicName || ""));
+        var cipherSuites = concatBytes.apply(null, (definition.cipherSuites || []).map(function (cipherSuite) {
+            return concatBytes(u16(cipherSuite.kdfId), u16(cipherSuite.aeadId));
+        }));
+        var contents = concatBytes(
+            Uint8Array.from([definition.configId & 0xFF]),
+            u16(definition.kemId),
+            u16(publicKey.length),
+            publicKey,
+            u16(cipherSuites.length),
+            cipherSuites,
+            Uint8Array.from([Math.min(255, definition.maximumNameLength || publicNameBytes.length)]),
+            Uint8Array.from([publicNameBytes.length]),
+            publicNameBytes,
+            u16(0)
+        );
+
+        return concatBytes(u16(0xFE0D), u16(contents.length), contents);
+    }
+
+    function resolveQuicConnectionId(lengthOption, defaultLength) {
+        var length = Number(lengthOption);
+
+        if (!Number.isFinite(length)) {
+            length = defaultLength;
+        }
+
+        return randomBytes(Math.max(0, Math.floor(length)));
+    }
+
+    function resolveQuicPacketNumber(options) {
+        var explicitPacketNumber = options && options.quicPacketNumber;
+        var packetNumberLength = options ? Number(options.quicPacketNumberLength) : NaN;
+
+        if (explicitPacketNumber && typeof explicitPacketNumber.length === "number") {
+            return Uint8Array.from(explicitPacketNumber);
+        }
+
+        if (!Number.isFinite(packetNumberLength)) {
+            packetNumberLength = 4;
+        }
+
+        return randomBytes(Math.max(1, Math.floor(packetNumberLength)));
+    }
+
     // Synchronous QUIC payload fallback when authenticated QUIC protection is unavailable.
     function generateQuicPayload(options) {
         var version = QUIC_VERSION_DEF;
-        var dcid = randomBytes(8);
-        var scid = randomBytes(8);
-        var packetNumber = randomBytes(4);
+        var dcid = resolveQuicConnectionId(options && options.quicDcidLength, 8);
+        var scid = resolveQuicConnectionId(options && options.quicScidLength, 8);
+        var packetNumber = resolveQuicPacketNumber(options);
         var clientHello = buildQuicClientHello(options.host, options, scid);
         var cryptoFrame = buildQuicCryptoFrame(clientHello, 0);
         var payload = cryptoFrame;
@@ -310,10 +661,10 @@
         }
 
         var version = QUIC_VERSION_DEF;
-        var dcid = randomBytes(8);
-        var scid = randomBytes(8);
-        var packetNumber = randomBytes(4);
-        var clientHello = buildQuicClientHello(options.host, options, scid);
+        var dcid = resolveQuicConnectionId(options && options.quicDcidLength, 8);
+        var scid = resolveQuicConnectionId(options && options.quicScidLength, 8);
+        var packetNumber = resolveQuicPacketNumber(options);
+        var clientHello = await buildQuicClientHelloAsync(options.host, options, scid);
         var cryptoFrame = buildQuicCryptoFrame(clientHello, 0);
         var payload = cryptoFrame;
 
@@ -329,6 +680,14 @@
             console.warn("QUIC encryption failed, falling back to masking:", error);
             return generateQuicPayload(options);
         }
+    }
+
+    function generateCapturedCurlQuicPayload(options) {
+        return generateQuicPayload(withCapturedCurlQuicProfile(options));
+    }
+
+    async function generateCapturedCurlQuicPayloadAsync(options) {
+        return await generateQuicPayloadAsync(await resolveCurlQuicOptionsAsync(options));
     }
 
     function generateTlsClientHelloPayload(options) {
@@ -376,26 +735,6 @@
         var websocketMessage = buildBrowserWebsocketRequest(browser, options.host, options.path).join("\r\n") + "\r\n\r\n";
 
         return encodeText(websocketMessage);
-    }
-
-    function generateCurlPayload(options) {
-        var target = withRandomQuery(options.path, options.randomQuery);
-        var curlVersion = randomItem(CURL_USER_AGENTS);
-        var lines = [
-            options.httpMethod + " " + target + " HTTP/1.1",
-            "Host: " + options.host,
-            "User-Agent: " + curlVersion,
-            "Accept: */*",
-            "Accept-Encoding: gzip, deflate, br",
-            "Connection: close"
-        ];
-
-        if (options.httpMethod === "POST") {
-            lines.push("Content-Length: 0");
-            lines.push("Content-Type: application/x-www-form-urlencoded");
-        }
-
-        return encodeText(lines.join("\r\n") + "\r\n\r\n");
     }
 
     function generateStunPayload(options) {
@@ -780,10 +1119,15 @@
     function buildClientHelloBody(host, options) {
         var browser = resolveBrowserProfile(options.browserVersion);
         var isQuic = !!options.withQuicTransportParameters;
-        var fingerprint = resolveTlsFingerprint(browser, isQuic, options.alpnProtocol);
-        var greaseValue = fingerprint.useGrease ? selectGreaseValue() : null;
-        var secondaryGreaseValue = fingerprint.useSecondaryGrease ? selectGreaseValue(greaseValue) : null;
-        var sessionId = randomBytes(32);
+        var fingerprint = cloneFingerprint(options.fingerprintOverride || resolveTlsFingerprint(browser, isQuic, options.tlsFingerprintProfile));
+        var greaseValue = Object.prototype.hasOwnProperty.call(options, "greaseValue")
+            ? options.greaseValue
+            : (fingerprint.useGrease ? selectGreaseValue() : null);
+        var secondaryGreaseValue = Object.prototype.hasOwnProperty.call(options, "secondaryGreaseValue")
+            ? options.secondaryGreaseValue
+            : (fingerprint.useSecondaryGrease ? selectGreaseValue(greaseValue) : null);
+        var sessionId = options.sessionIdBytes ? Uint8Array.from(options.sessionIdBytes) : randomBytes(32);
+        var clientRandom = options.clientRandom ? Uint8Array.from(options.clientRandom) : randomBytes(32);
         var extensions = buildTlsExtensions(host, {
             withTls13: !!options.withTls13,
             alpnProtocol: options.alpnProtocol,
@@ -798,7 +1142,7 @@
         
         var body = concatBytes(
             u16(options.legacyVersion),
-            randomBytes(32),
+            clientRandom,
             Uint8Array.from([sessionId.length]),
             sessionId,
             u16(cipherSuites.length),
@@ -813,6 +1157,136 @@
             u24(body.length),
             body
         );
+    }
+
+    async function buildDynamicEchQuicClientHello(host, options, scid) {
+        var browser = resolveBrowserProfile(options.browserVersion);
+        var baseFingerprint = resolveTlsFingerprint(browser, true, options.tlsFingerprintProfile);
+        var echConfig = options.echConfig;
+        var encodedInner = buildClientHelloBody(host, {
+            legacyVersion: 0x0303,
+            withTls13: true,
+            alpnProtocol: "h3",
+            browserVersion: options.browserVersion,
+            withQuicTransportParameters: true,
+            quicSourceConnectionId: scid,
+            fingerprintOverride: createFingerprintWithEch(baseFingerprint, { clientHelloType: 0x01 }),
+            sessionIdBytes: zeroBytes(0)
+        }).subarray(4);
+        var innerPaddingLength = calculateEncodedClientHelloInnerPadding(encodedInner, host, echConfig);
+        var paddedEncodedInner = innerPaddingLength > 0 ? concatBytes(encodedInner, zeroBytes(innerPaddingLength)) : encodedInner;
+        var hpkeContext = await Crypto.hpkeSetupBaseSender(
+            echConfig.publicKey,
+            buildEchInfo(echConfig),
+            echConfig.kemId,
+            echConfig.kdfId,
+            echConfig.aeadId
+        );
+        var outerClientHello = buildClientHelloBody(echConfig.publicName || host, {
+            legacyVersion: 0x0303,
+            withTls13: true,
+            alpnProtocol: "h3",
+            browserVersion: options.browserVersion,
+            withQuicTransportParameters: true,
+            quicSourceConnectionId: scid,
+            fingerprintOverride: createFingerprintWithEch(baseFingerprint, {
+                clientHelloType: 0x00,
+                kdfId: echConfig.kdfId,
+                aeadId: echConfig.aeadId,
+                configId: echConfig.configId,
+                enc: hpkeContext.enc,
+                payload: zeroBytes(paddedEncodedInner.length + getHpkeAeadTagLength(echConfig.aeadId))
+            })
+        });
+        var echPayload = await Crypto.hpkeSeal(hpkeContext, outerClientHello.subarray(4), paddedEncodedInner);
+
+        return replaceEchPayloadInClientHello(outerClientHello, echPayload);
+    }
+
+    function createFingerprintWithEch(baseFingerprint, echExtension) {
+        var fingerprint = cloneFingerprint(baseFingerprint);
+
+        if (fingerprint.extensionOrder.indexOf("encrypted_client_hello") === -1) {
+            fingerprint.extensionOrder = fingerprint.extensionOrder.concat(["encrypted_client_hello"]);
+        }
+
+        fingerprint.encryptedClientHello = echExtension;
+        return fingerprint;
+    }
+
+    function buildEchInfo(echConfig) {
+        return concatBytes(encodeText("tls ech"), Uint8Array.from([0x00]), echConfig.rawBytes);
+    }
+
+    function calculateEncodedClientHelloInnerPadding(encodedInner, host, echConfig) {
+        var hostnameLength = encodeText(normalizeHost(host)).length;
+        var maxNameLength = echConfig && Number.isFinite(echConfig.maximumNameLength) && echConfig.maximumNameLength > 0
+            ? echConfig.maximumNameLength
+            : hostnameLength;
+        var paddingLength = Math.max(0, maxNameLength - hostnameLength);
+        var paddedLength = encodedInner.length + paddingLength;
+        var blockPadding = (32 - (paddedLength % 32)) % 32;
+
+        return paddingLength + blockPadding;
+    }
+
+    function getHpkeAeadTagLength(aeadId) {
+        if (aeadId === 0x0002) {
+            return 16;
+        }
+
+        return 16;
+    }
+
+    function replaceEchPayloadInClientHello(clientHelloBytes, echPayload) {
+        var bytes = Uint8Array.from(clientHelloBytes);
+        var payloadOffset = findEchPayloadOffset(bytes);
+
+        if (payloadOffset.length !== echPayload.length) {
+            throw new Error("ECH payload length mismatch.");
+        }
+
+        bytes.set(echPayload, payloadOffset.offset);
+        return bytes;
+    }
+
+    function findEchPayloadOffset(clientHelloBytes) {
+        var offset = 4 + 2 + 32;
+        var sessionIdLength = clientHelloBytes[offset];
+        var cipherSuitesLength;
+        var compressionMethodsLength;
+        var extensionsLength;
+        var extensionsEnd;
+
+        offset += 1 + sessionIdLength;
+        cipherSuitesLength = readU16(clientHelloBytes, offset);
+        offset += 2 + cipherSuitesLength;
+        compressionMethodsLength = clientHelloBytes[offset];
+        offset += 1 + compressionMethodsLength;
+        extensionsLength = readU16(clientHelloBytes, offset);
+        offset += 2;
+        extensionsEnd = offset + extensionsLength;
+
+        while (offset + 4 <= extensionsEnd) {
+            var extensionType = readU16(clientHelloBytes, offset);
+            var extensionLength = readU16(clientHelloBytes, offset + 2);
+            var extensionDataOffset = offset + 4;
+
+            if (extensionType === 0xFE0D) {
+                var encLength = readU16(clientHelloBytes, extensionDataOffset + 1 + 2 + 2 + 1);
+                var payloadLengthOffset = extensionDataOffset + 1 + 2 + 2 + 1 + 2 + encLength;
+                var payloadLength = readU16(clientHelloBytes, payloadLengthOffset);
+
+                return {
+                    offset: payloadLengthOffset + 2,
+                    length: payloadLength
+                };
+            }
+
+            offset = extensionDataOffset + extensionLength;
+        }
+
+        throw new Error("ECH extension was not found in ClientHello.");
     }
 
     function buildDtlsClientHelloBody(host) {
@@ -887,6 +1361,8 @@
                 parts.push(buildCompressCertificateExtension(options.fingerprint.compressCertificateAlgorithms));
             } else if (extensionName === "application_settings" && !isQuic && options.alpnProtocol === "h2" && options.fingerprint.includeApplicationSettings) {
                 parts.push(buildApplicationSettingsExtension(["h2"]));
+            } else if (extensionName === "encrypted_client_hello" && options.fingerprint.encryptedClientHello) {
+                parts.push(buildEncryptedClientHelloExtension(options.fingerprint.encryptedClientHello));
             } else if (extensionName === "secondary_grease" && Number.isFinite(options.secondaryGreaseValue)) {
                 parts.push(buildGreaseExtension(options.secondaryGreaseValue));
             } else if (extensionName === "padding") {
@@ -1022,6 +1498,27 @@
         return concatBytes(u16(0x001B), u16(algorithmList.length), algorithmList);
     }
 
+    function buildEncryptedClientHelloExtension(config) {
+        if (config && config.clientHelloType === 0x01) {
+            return concatBytes(u16(0xFE0D), u16(1), Uint8Array.from([0x01]));
+        }
+
+        var enc = config && config.enc ? config.enc : zeroBytes(0);
+        var payload = config && config.payload ? config.payload : zeroBytes(0);
+        var data = concatBytes(
+            Uint8Array.from([config && Number.isFinite(config.clientHelloType) ? config.clientHelloType : 0x00]),
+            u16(config && Number.isFinite(config.kdfId) ? config.kdfId : 0x0001),
+            u16(config && Number.isFinite(config.aeadId) ? config.aeadId : 0x0001),
+            Uint8Array.from([config && Number.isFinite(config.configId) ? config.configId : 0x00]),
+            u16(enc.length),
+            enc,
+            u16(payload.length),
+            payload
+        );
+
+        return concatBytes(u16(0xFE0D), u16(data.length), data);
+    }
+
     function buildApplicationSettingsExtension(protocols) {
         var entries = concatBytes.apply(null, protocols.map(function (protocol) {
             var protocolBytes = encodeText(protocol);
@@ -1031,23 +1528,31 @@
     }
 
     function buildQuicTransportParametersExtension(sourceConnectionId, fingerprint) {
-        var maxUdpPayloadSize = (fingerprint && fingerprint.maxUdpPayloadSize) || 1472;
-        var activeConnectionIdLimit = (fingerprint && fingerprint.activeConnectionIdLimit) || 8;
-        var parameters = concatBytes(
-            encodeTransportParameter(0x01, encodeQuicVarInt(30000)),
-            encodeTransportParameter(0x03, encodeQuicVarInt(maxUdpPayloadSize)),
-            encodeTransportParameter(0x04, encodeQuicVarInt(15728640)),
-            encodeTransportParameter(0x05, encodeQuicVarInt(6291456)),
-            encodeTransportParameter(0x06, encodeQuicVarInt(6291456)),
-            encodeTransportParameter(0x07, encodeQuicVarInt(6291456)),
-            encodeTransportParameter(0x08, encodeQuicVarInt(100)),
-            encodeTransportParameter(0x09, encodeQuicVarInt(100)),
-            encodeTransportParameter(0x0a, encodeQuicVarInt(3)),
-            encodeTransportParameter(0x0b, encodeQuicVarInt(25)),
-            encodeTransportParameter(0x0c, zeroBytes(0)),
-            encodeTransportParameter(0x0e, encodeQuicVarInt(activeConnectionIdLimit)),
-            encodeTransportParameter(0x0f, sourceConnectionId)
-        );
+        var order = fingerprint && fingerprint.quicTransportParameterOrder
+            ? fingerprint.quicTransportParameterOrder
+            : [0x01, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0e, 0x0f];
+        var values = {
+            0x01: encodeQuicVarInt(readFingerprintNumber(fingerprint, "maxIdleTimeout", 30000)),
+            0x03: encodeQuicVarInt(readFingerprintNumber(fingerprint, "maxUdpPayloadSize", 1472)),
+            0x04: encodeQuicVarInt(readFingerprintNumber(fingerprint, "initialMaxData", 15728640)),
+            0x05: encodeQuicVarInt(readFingerprintNumber(fingerprint, "initialMaxStreamDataBidiLocal", 6291456)),
+            0x06: encodeQuicVarInt(readFingerprintNumber(fingerprint, "initialMaxStreamDataBidiRemote", 6291456)),
+            0x07: encodeQuicVarInt(readFingerprintNumber(fingerprint, "initialMaxStreamDataUni", 6291456)),
+            0x08: encodeQuicVarInt(readFingerprintNumber(fingerprint, "initialMaxStreamsBidi", 100)),
+            0x09: encodeQuicVarInt(readFingerprintNumber(fingerprint, "initialMaxStreamsUni", 100)),
+            0x0a: encodeQuicVarInt(readFingerprintNumber(fingerprint, "ackDelayExponent", 3)),
+            0x0b: encodeQuicVarInt(readFingerprintNumber(fingerprint, "maxAckDelay", 25)),
+            0x0e: encodeQuicVarInt(readFingerprintNumber(fingerprint, "activeConnectionIdLimit", 8)),
+            0x0f: sourceConnectionId
+        };
+        var parameters = concatBytes.apply(null, order.map(function (parameterId) {
+            if (parameterId === 0x0c) {
+                return encodeTransportParameter(parameterId, zeroBytes(0));
+            }
+
+            return encodeTransportParameter(parameterId, values[parameterId]);
+        }));
+
         return concatBytes(u16(0x0039), u16(parameters.length), parameters);
     }
 
@@ -1418,8 +1923,13 @@
         return concatBytes.apply(null, parts);
     }
 
-    function resolveTlsFingerprint(browser, isQuic) {
+    function resolveTlsFingerprint(browser, isQuic, profileId) {
         var defaultSignatureAlgorithms = [0x0403, 0x0804, 0x0401, 0x0503, 0x0805, 0x0501, 0x0806, 0x0601, 0x0807];
+
+        if (isQuic && profileId === CURL_QUIC_PROFILE_ID) {
+            return createCapturedCurlQuicFingerprint();
+        }
+
         return {
             useGrease: true,
             useSecondaryGrease: true,
@@ -1439,6 +1949,38 @@
             maxUdpPayloadSize: 1472,
             activeConnectionIdLimit: 8
         };
+    }
+
+    function createCapturedCurlQuicFingerprint() {
+        return {
+            useGrease: false,
+            useSecondaryGrease: false,
+            cipherSuites: [0x1301, 0x1302, 0x1303],
+            extensionOrder: ["sni", "supported_versions", "supported_groups", "signature_algorithms", "alpn", "key_share", "psk_modes", "quic_transport_parameters", "compress_certificate"],
+            supportedGroups: [0x001D, 0x0017, 0x0018],
+            signatureAlgorithms: [0x0403, 0x0503, 0x0603, 0x0804, 0x0805, 0x0806],
+            supportedVersions: [0x0304],
+            keyShares: [0x001D],
+            compressCertificateAlgorithms: [0x0002],
+            includeApplicationSettings: false,
+            paddingTarget: 0,
+            encryptedClientHello: null,
+            quicTransportParameterOrder: [0x03, 0x07, 0x05, 0x09, 0x01, 0x08, 0x0f, 0x0e, 0x06, 0x04],
+            maxIdleTimeout: 30000,
+            maxUdpPayloadSize: 1472,
+            initialMaxData: 10485760,
+            initialMaxStreamDataBidiLocal: 5242880,
+            initialMaxStreamDataBidiRemote: 5242880,
+            initialMaxStreamDataUni: 5242880,
+            initialMaxStreamsBidi: 100,
+            initialMaxStreamsUni: 100,
+            activeConnectionIdLimit: 2
+        };
+    }
+
+    function readFingerprintNumber(fingerprint, key, defaultValue) {
+        var value = fingerprint && fingerprint[key];
+        return Number.isFinite(value) ? value : defaultValue;
     }
 
     function buildUseSrtpExtension() {
@@ -1868,8 +2410,66 @@
         return hex;
     }
 
+    function hexToBytes(value) {
+        var normalized = String(value || "").replace(/[^0-9a-f]/ig, "");
+        var bytes = new Uint8Array(Math.floor(normalized.length / 2));
+        var index;
+
+        for (index = 0; index < bytes.length; index += 1) {
+            bytes[index] = parseInt(normalized.slice(index * 2, (index * 2) + 2), 16);
+        }
+
+        return bytes;
+    }
+
+    function cloneOptions(options) {
+        var copy = {};
+        var key;
+
+        options = options || {};
+
+        for (key in options) {
+            if (Object.prototype.hasOwnProperty.call(options, key)) {
+                copy[key] = options[key];
+            }
+        }
+
+        return copy;
+    }
+
+    function cloneFingerprint(fingerprint) {
+        var copy = {};
+        var key;
+
+        fingerprint = fingerprint || {};
+
+        for (key in fingerprint) {
+            if (!Object.prototype.hasOwnProperty.call(fingerprint, key)) {
+                continue;
+            }
+
+            if (fingerprint[key] instanceof Uint8Array) {
+                copy[key] = Uint8Array.from(fingerprint[key]);
+            } else if (Array.isArray(fingerprint[key])) {
+                copy[key] = fingerprint[key].map(function (item) {
+                    return item && typeof item === "object" ? cloneOptions(item) : item;
+                });
+            } else if (fingerprint[key] && typeof fingerprint[key] === "object") {
+                copy[key] = cloneOptions(fingerprint[key]);
+            } else {
+                copy[key] = fingerprint[key];
+            }
+        }
+
+        return copy;
+    }
+
     function encodeText(value) {
         return textEncoder.encode(String(value));
+    }
+
+    function decodeText(bytes) {
+        return textDecoder.decode(Uint8Array.from(bytes || []));
     }
 
     function createTextEncoder() {
@@ -1882,6 +2482,18 @@
         }
 
         throw new Error("TextEncoder is not available in this environment.");
+    }
+
+    function createTextDecoder() {
+        if (typeof TextDecoder !== "undefined") {
+            return new TextDecoder();
+        }
+
+        if (typeof require === "function") {
+            return new (require("node:util").TextDecoder)();
+        }
+
+        throw new Error("TextDecoder is not available in this environment.");
     }
 
     function base64EncodeBytes(bytes) {
@@ -1905,6 +2517,30 @@
         }
 
         throw new Error("Base64 encoding is not available in this environment.");
+    }
+
+    function base64DecodeBytes(value) {
+        if (typeof root.atob === "function") {
+            var binary = root.atob(String(value || ""));
+            var bytes = new Uint8Array(binary.length);
+            var index;
+
+            for (index = 0; index < binary.length; index += 1) {
+                bytes[index] = binary.charCodeAt(index);
+            }
+
+            return bytes;
+        }
+
+        if (typeof Buffer !== "undefined") {
+            return new Uint8Array(Buffer.from(String(value || ""), "base64"));
+        }
+
+        if (typeof require === "function") {
+            return new Uint8Array(require("node:buffer").Buffer.from(String(value || ""), "base64"));
+        }
+
+        throw new Error("Base64 decoding is not available in this environment.");
     }
 
     function getCrypto() {
@@ -1989,6 +2625,10 @@
         return Uint8Array.from([(value >>> 8) & 0xFF, value & 0xFF]);
     }
 
+    function readU16(bytes, offset) {
+        return ((bytes[offset] << 8) | bytes[offset + 1]) >>> 0;
+    }
+
     function u24(value) {
         return Uint8Array.from([(value >>> 16) & 0xFF, (value >>> 8) & 0xFF, value & 0xFF]);
     }
@@ -2051,33 +2691,22 @@
         llmnr: generateLlmnrPayload,
         nbns: generateNbnsPayload,
         quic: generateQuicPayload,
-        tls_client_hello: generateTlsClientHelloPayload,
-        http2: generateHttp2Payload,
-        http_browser: generateHttpBrowserPayload,
-        websocket: generateWebsocketPayload,
-        curl: generateCurlPayload,
+        curl_quic: generateCapturedCurlQuicPayload,
         stun: generateStunPayload,
         dtls: generateDtlsPayload,
         sip: generateSipPayload,
         rtp: generateRtpPayload,
         rtcp: generateRtcpPayload,
         coap: generateCoapPayload,
-        mqtt: generateMqttPayload,
         ntp: generateNtpPayload,
         dhcp_discover: generateDhcpDiscoverPayload,
-        snmp: generateSnmpPayload,
-        syslog: generateSyslogPayload,
-        tftp: generateTftpPayload,
-        radius: generateRadiusPayload,
-        redis: generateRedisPayload,
-        postgresql: generatePostgresqlPayload,
-        mysql: generateMysqlPayload,
         utp: generateUtpPayload,
         bittorrent_dht: generateBittorrentDhtPayload
     };
 
     var PROTOCOL_GENERATORS_ASYNC = {
-        quic: generateQuicPayloadAsync
+        quic: generateQuicPayloadAsync,
+        curl_quic: generateCapturedCurlQuicPayloadAsync
     };
 
     return {

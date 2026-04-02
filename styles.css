@@ -106,9 +106,7 @@ textarea:focus-visible,
     justify-content: flex-end;
 }
 
-.intro,
-.payload-meta,
-.protocol-info {
+.intro {
     color: var(--muted);
 }
 
@@ -275,23 +273,6 @@ textarea {
 
 .field-wide {
     grid-column: 1 / -1;
-}
-
-.protocol-info {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 8px;
-    margin-bottom: 10px;
-    font-size: 13px;
-}
-
-.protocol-summary {
-    margin: 0;
-}
-
-.protocol-link {
-    text-decoration: underline;
 }
 
 .checkbox-row {

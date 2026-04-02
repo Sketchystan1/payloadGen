@@ -42,6 +42,10 @@
             hpLabel: "quicv2 hp"
         }
     };
+    var HPKE_VERSION_LABEL = encodeText("HPKE-v1");
+    var HPKE_SUITE_PREFIX = encodeText("HPKE");
+    var HPKE_KEM_PREFIX = encodeText("KEM");
+    var HPKE_MODE_BASE = 0x00;
 
     function getCrypto() {
         if (root.crypto && root.crypto.subtle) {
@@ -63,9 +67,10 @@
     // HKDF-Extract as per RFC 5869
     async function hkdfExtract(salt, ikm) {
         var crypto = getCrypto();
+        var normalizedSalt = normalizeBytes(salt);
         var key = await crypto.subtle.importKey(
             "raw",
-            salt,
+            normalizedSalt.length ? normalizedSalt : new Uint8Array(32),
             { name: "HMAC", hash: "SHA-256" },
             false,
             ["sign"]
@@ -135,6 +140,180 @@
         }
 
         return output;
+    }
+
+    function concatBytes() {
+        var totalLength = 0;
+        var offset = 0;
+        var index;
+        var buffers = Array.prototype.slice.call(arguments).map(normalizeBytes);
+        var output;
+
+        for (index = 0; index < buffers.length; index += 1) {
+            totalLength += buffers[index].length;
+        }
+
+        output = new Uint8Array(totalLength);
+
+        for (index = 0; index < buffers.length; index += 1) {
+            output.set(buffers[index], offset);
+            offset += buffers[index].length;
+        }
+
+        return output;
+    }
+
+    function normalizeBytes(value) {
+        if (!value) {
+            return EMPTY_BYTES;
+        }
+
+        if (value instanceof Uint8Array) {
+            return value;
+        }
+
+        if (ArrayBuffer.isView(value)) {
+            return new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
+        }
+
+        if (value instanceof ArrayBuffer) {
+            return new Uint8Array(value);
+        }
+
+        return Uint8Array.from(value);
+    }
+
+    function u16(value) {
+        return Uint8Array.from([(value >>> 8) & 0xFF, value & 0xFF]);
+    }
+
+    function getHpkeKdfHashLength(kdfId) {
+        if (kdfId === 0x0001) {
+            return 32;
+        }
+
+        throw new Error("Unsupported HPKE KDF identifier: " + kdfId);
+    }
+
+    function getHpkeAeadParameters(aeadId) {
+        if (aeadId === 0x0001) {
+            return { keyLength: 16, nonceLength: 12, tagLength: 16 };
+        }
+
+        if (aeadId === 0x0002) {
+            return { keyLength: 32, nonceLength: 12, tagLength: 16 };
+        }
+
+        throw new Error("Unsupported HPKE AEAD identifier: " + aeadId);
+    }
+
+    function getHpkeKemSharedSecretLength(kemId) {
+        if (kemId === 0x0020) {
+            return 32;
+        }
+
+        throw new Error("Unsupported HPKE KEM identifier: " + kemId);
+    }
+
+    function buildHpkeSuiteId(kemId, kdfId, aeadId) {
+        return concatBytes(HPKE_SUITE_PREFIX, u16(kemId), u16(kdfId), u16(aeadId));
+    }
+
+    function buildHpkeKemSuiteId(kemId) {
+        return concatBytes(HPKE_KEM_PREFIX, u16(kemId));
+    }
+
+    async function hpkeLabeledExtract(salt, suiteId, label, ikm) {
+        return await hkdfExtract(
+            normalizeBytes(salt),
+            concatBytes(HPKE_VERSION_LABEL, normalizeBytes(suiteId), encodeText(label), normalizeBytes(ikm))
+        );
+    }
+
+    async function hpkeLabeledExpand(prk, suiteId, label, info, length) {
+        return await hkdfExpand(
+            normalizeBytes(prk),
+            concatBytes(u16(length), HPKE_VERSION_LABEL, normalizeBytes(suiteId), encodeText(label), normalizeBytes(info)),
+            length
+        );
+    }
+
+    async function importX25519PublicKey(rawPublicKey) {
+        var crypto = getCrypto();
+        return await crypto.subtle.importKey(
+            "raw",
+            normalizeBytes(rawPublicKey),
+            { name: "X25519" },
+            false,
+            []
+        );
+    }
+
+    async function generateX25519KeyPair() {
+        var crypto = getCrypto();
+        return await crypto.subtle.generateKey({ name: "X25519" }, true, ["deriveBits"]);
+    }
+
+    async function generateX25519PublicKey() {
+        var keyPair = await generateX25519KeyPair();
+        return new Uint8Array(await getCrypto().subtle.exportKey("raw", keyPair.publicKey));
+    }
+
+    async function deriveX25519SharedSecret(privateKey, rawPublicKey) {
+        var crypto = getCrypto();
+        var publicKey = await importX25519PublicKey(rawPublicKey);
+        return new Uint8Array(await crypto.subtle.deriveBits(
+            { name: "X25519", public: publicKey },
+            privateKey,
+            256
+        ));
+    }
+
+    async function hpkeExtractAndExpand(kemId, kdfId, dh, enc, recipientPublicKey) {
+        var kemSuiteId = buildHpkeKemSuiteId(kemId);
+        var kemContext = concatBytes(normalizeBytes(enc), normalizeBytes(recipientPublicKey));
+        var eaePrk = await hpkeLabeledExtract(EMPTY_BYTES, kemSuiteId, "eae_prk", normalizeBytes(dh));
+
+        return await hpkeLabeledExpand(
+            eaePrk,
+            kemSuiteId,
+            "shared_secret",
+            kemContext,
+            getHpkeKemSharedSecretLength(kemId)
+        );
+    }
+
+    async function hpkeSetupBaseSender(recipientPublicKey, info, kemId, kdfId, aeadId) {
+        var recipientBytes = normalizeBytes(recipientPublicKey);
+        var suiteId = buildHpkeSuiteId(kemId, kdfId, aeadId);
+        var aead = getHpkeAeadParameters(aeadId);
+        var keyPair = await generateX25519KeyPair();
+        var enc = new Uint8Array(await getCrypto().subtle.exportKey("raw", keyPair.publicKey));
+        var dh = await deriveX25519SharedSecret(keyPair.privateKey, recipientBytes);
+        var sharedSecret = await hpkeExtractAndExpand(kemId, kdfId, dh, enc, recipientBytes);
+        var pskIdHash = await hpkeLabeledExtract(EMPTY_BYTES, suiteId, "psk_id_hash", EMPTY_BYTES);
+        var infoHash = await hpkeLabeledExtract(EMPTY_BYTES, suiteId, "info_hash", normalizeBytes(info));
+        var keyScheduleContext = concatBytes(Uint8Array.from([HPKE_MODE_BASE]), pskIdHash, infoHash);
+        var secret = await hpkeLabeledExtract(sharedSecret, suiteId, "secret", EMPTY_BYTES);
+
+        return {
+            enc: enc,
+            kemId: kemId,
+            kdfId: kdfId,
+            aeadId: aeadId,
+            key: await hpkeLabeledExpand(secret, suiteId, "key", keyScheduleContext, aead.keyLength),
+            baseNonce: await hpkeLabeledExpand(secret, suiteId, "base_nonce", keyScheduleContext, aead.nonceLength),
+            tagLength: aead.tagLength
+        };
+    }
+
+    async function hpkeSeal(context, aad, plaintext) {
+        return await aesGcmEncrypt(
+            normalizeBytes(context.key),
+            normalizeBytes(context.baseNonce),
+            normalizeBytes(plaintext),
+            normalizeBytes(aad)
+        );
     }
 
     function getQuicVersionParameters(version) {
@@ -362,6 +541,9 @@
         aesGcmEncrypt: aesGcmEncrypt,
         hkdfExtract: hkdfExtract,
         hkdfExpandLabel: hkdfExpandLabel,
+        hpkeSetupBaseSender: hpkeSetupBaseSender,
+        hpkeSeal: hpkeSeal,
+        generateX25519PublicKey: generateX25519PublicKey,
         constructNonce: constructNonce,
         applyHeaderProtection: applyHeaderProtection
     };

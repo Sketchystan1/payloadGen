@@ -106,7 +106,6 @@
             "urn:schemas-upnp-org:service:WANIPConnection:1",
             "urn:schemas-upnp-org:device:MediaServer:1"
         ],
-        CURL_USER_AGENTS: ["curl/8.5.0", "curl/8.7.1", "curl/8.10.1", "curl/8.13.0"],
         CHROME_BROWSER_DATA: CHROME_BROWSER_DATA,
         loadChromeVersionData: loadChromeVersionData
     };
@@ -149,112 +148,56 @@
         mtuLabel: "MTU",
         padMtuLabel: "Pad to MTU",
         protocolLabel: "Protocol",
-        wikiLinkLabel: "Wiki",
         payloadTitle: "Payload"
     };
     var CATEGORY_DEFS = [
-        { id: "discovery", rank: 1, label: "Discovery & Name Resolution" },
-        { id: "web", rank: 2, label: "Web & Secure Web" },
-        { id: "realtime", rank: 3, label: "Realtime & Media" },
-        { id: "iot", rank: 4, label: "IoT & Device" },
-        { id: "infra", rank: 5, label: "Infrastructure & Operations" },
-        { id: "messaging", rank: 6, label: "Messaging & Databases" },
-        { id: "p2p", rank: 7, label: "P2P & Distribution" }
+        { id: "discovery", rank: 1, label: "Discovery" },
+        { id: "web", rank: 2, label: "Web" },
+        { id: "realtime", rank: 3, label: "Realtime" },
+        { id: "iot", rank: 4, label: "IoT" },
+        { id: "infra", rank: 5, label: "Infrastructure" },
+        { id: "messaging", rank: 6, label: "Messaging" },
+        { id: "p2p", rank: 7, label: "P2P" }
     ];
     var OPTION_SETS = {
-        httpMethods: [{ value: "GET", label: "GET" }, { value: "HEAD", label: "HEAD" }, { value: "POST", label: "POST" }],
         sipActions: [{ value: "OPTIONS", label: "OPTIONS" }, { value: "REGISTER", label: "REGISTER" }],
         coapMethods: [{ value: "GET", label: "GET" }, { value: "POST", label: "POST" }],
-        tlsAlpn: [{ value: "http/1.1", label: "http/1.1" }, { value: "h2", label: "h2" }],
-        syslogFacilities: [{ value: "user", label: "user" }, { value: "daemon", label: "daemon" }, { value: "local0", label: "local0" }],
-        syslogSeverities: [{ value: "info", label: "info" }, { value: "notice", label: "notice" }, { value: "warning", label: "warning" }]
+        tlsAlpn: [{ value: "http/1.1", label: "http/1.1" }, { value: "h2", label: "h2" }]
     };
     var FIELD_DEFS = {
         host: { type: "text", label: "Domain", placeholder: "example.com", spellcheck: false },
         path: { type: "text", label: "Path", placeholder: "/", defaultValue: "/", spellcheck: false },
-        httpMethod: { type: "select", label: "Method", optionSet: "httpMethods", defaultValue: "GET" },
         sipAction: { type: "select", label: "Action", optionSet: "sipActions", defaultValue: "OPTIONS" },
         coapMethod: { type: "select", label: "Method", optionSet: "coapMethods", defaultValue: "GET" },
         randomQuery: { type: "checkbox", label: "Random Query", defaultValue: true },
-        filename: { type: "text", label: "Filename", defaultValue: "test.bin", spellcheck: false },
-        username: { type: "text", label: "Username", spellcheck: false },
         database: { type: "text", label: "Database", spellcheck: false },
-        community: { type: "text", label: "Community", defaultValue: "public", spellcheck: false },
-        oid: { type: "text", label: "OID", defaultValue: "1.3.6.1.2.1.1.1.0", spellcheck: false },
-        message: { type: "textarea", label: "Message", defaultValue: "payloadgen test", className: "field field-wide", rows: 3, spellcheck: false },
         clientId: { type: "text", label: "Client ID", spellcheck: false },
         tlsAlpn: { type: "select", label: "ALPN", optionSet: "tlsAlpn", defaultValue: "h2" },
-        browserVersion: { type: "text", label: "Version", spellcheck: false },
-        syslogFacility: { type: "select", label: "Facility", optionSet: "syslogFacilities", defaultValue: "user" },
-        syslogSeverity: { type: "select", label: "Severity", optionSet: "syslogSeverities", defaultValue: "info" }
+        browserVersion: { type: "text", label: "Version", spellcheck: false }
     };
     var PROTOCOL_CATALOG = [
-        { id: "dns", categoryId: "discovery", transport: "udp", port: 53, rank: 1, label: "DNS", descriptor: "Standard A-record query", fieldSet: ["host"] },
-        { id: "mdns", categoryId: "discovery", transport: "udp", port: 5353, rank: 2, label: "mDNS", descriptor: "Multicast DNS query with randomized query class and DNS case", fieldSet: ["host"] },
-        { id: "ssdp", categoryId: "discovery", transport: "udp", port: 1900, rank: 3, label: "SSDP", descriptor: "Generated discovery probe", fieldSet: [] },
-        { id: "llmnr", categoryId: "discovery", transport: "udp", port: 5355, rank: 4, label: "LLMNR", descriptor: "LLMNR hostname query", fieldSet: ["host"] },
-        { id: "nbns", categoryId: "discovery", transport: "udp", port: 137, rank: 5, label: "NBNS", descriptor: "NetBIOS name query", fieldSet: ["host"] },
-        { id: "quic", categoryId: "web", transport: "udp", port: 443, rank: 1, label: "QUIC", descriptor: "Initial-like QUIC payload", fieldSet: ["host"] },
-        { id: "tls_client_hello", categoryId: "web", transport: "tcp", port: 443, rank: 2, label: "TLS ClientHello", descriptor: "TLS ClientHello packet", fieldSet: ["host", "browserVersion", "tlsAlpn"], defaults: { tlsAlpn: "h2" } },
-        { id: "http2", categoryId: "web", transport: "tcp", port: 80, rank: 3, label: "HTTP/2", descriptor: "Browser-style HTTP/2 preface, SETTINGS, and opening stream", fieldSet: ["host", "path", "browserVersion"], defaults: { path: "/" } },
-        { id: "http_browser", categoryId: "web", transport: "tcp", port: 80, rank: 4, label: "HTTP Browser", descriptor: "Browser-style HTTP/1.1 request", fieldSet: ["host", "browserVersion", "path", "randomQuery"], defaults: { path: "/", randomQuery: true } },
-        { id: "websocket", categoryId: "web", transport: "tcp", port: 80, rank: 5, label: "WebSocket", descriptor: "WebSocket upgrade request", fieldSet: ["host", "browserVersion", "path"], defaults: { path: "/" } },
-        { id: "curl", categoryId: "web", transport: "tcp", port: 80, rank: 6, label: "cURL (HTTP/1.1)", descriptor: "Dynamic HTTP/1.1 request with curl User-Agent", fieldSet: ["host", "path", "httpMethod", "randomQuery"], defaults: { path: "/", httpMethod: "GET", randomQuery: true } },
-        { id: "stun", categoryId: "realtime", transport: "udp", port: 3478, rank: 1, label: "STUN", descriptor: "Binding Request with SOFTWARE attribute", fieldSet: ["host"] },
-        { id: "dtls", categoryId: "realtime", transport: "udp", port: 443, rank: 2, label: "DTLS (WebRTC)", descriptor: "ClientHello-like DTLS datagram", fieldSet: ["host"] },
-        { id: "sip", categoryId: "realtime", transport: "udp", port: 5060, rank: 3, label: "SIP", descriptor: "SIP request with randomized headers", fieldSet: ["host", "sipAction"], defaults: { sipAction: "OPTIONS" } },
-        { id: "rtp", categoryId: "realtime", transport: "udp", port: 5004, rank: 4, label: "RTP", descriptor: "12-byte RTP header", fieldSet: [] },
-        { id: "rtcp", categoryId: "realtime", transport: "udp", port: 5005, rank: 5, label: "RTCP", descriptor: "Receiver Report-like RTCP packet", fieldSet: [] },
-        { id: "coap", categoryId: "iot", transport: "udp", port: 5683, rank: 1, label: "CoAP", descriptor: "CoAP request with Uri-Host and Uri-Path", fieldSet: ["host", "path", "coapMethod"], defaults: { path: "/", coapMethod: "GET" } },
-        { id: "mqtt", categoryId: "iot", transport: "tcp", port: 1883, rank: 2, label: "MQTT", descriptor: "MQTT CONNECT packet", fieldSet: ["clientId"] },
-        { id: "ntp", categoryId: "infra", transport: "udp", port: 123, rank: 1, label: "NTP", descriptor: "NTP v4 client request", fieldSet: [] },
-        { id: "dhcp_discover", categoryId: "infra", transport: "udp", port: 67, rank: 2, label: "DHCP DISCOVER", descriptor: "DHCP DISCOVER packet", fieldSet: [] },
-        { id: "snmp", categoryId: "infra", transport: "udp", port: 161, rank: 3, label: "SNMP", descriptor: "SNMP GET request", fieldSet: ["community", "oid"], defaults: { community: "public", oid: "1.3.6.1.2.1.1.1.0" } },
-        { id: "syslog", categoryId: "infra", transport: "udp", port: 514, rank: 4, label: "Syslog", descriptor: "UDP syslog message", fieldSet: ["message", "syslogFacility", "syslogSeverity"], defaults: { message: "payloadgen test", syslogFacility: "user", syslogSeverity: "info" } },
-        { id: "tftp", categoryId: "infra", transport: "udp", port: 69, rank: 5, label: "TFTP", descriptor: "TFTP RRQ request with negotiated option extensions", fieldSet: ["filename"], defaults: { filename: "test.bin" } },
-        { id: "radius", categoryId: "infra", transport: "udp", port: 1812, rank: 6, label: "RADIUS", descriptor: "RADIUS Access-Request", fieldSet: ["username"], defaults: { username: "user" } },
-        { id: "redis", categoryId: "messaging", transport: "tcp", port: 6379, rank: 1, label: "Redis RESP", descriptor: "RESP PING request", fieldSet: [] },
-        { id: "postgresql", categoryId: "messaging", transport: "tcp", port: 5432, rank: 2, label: "PostgreSQL", descriptor: "PostgreSQL startup packet", fieldSet: ["username", "database"], defaults: { username: "postgres", database: "postgres" } },
-        { id: "mysql", categoryId: "messaging", transport: "tcp", port: 3306, rank: 3, label: "MySQL", descriptor: "MySQL client command packet", fieldSet: ["username"], defaults: { username: "root" } },
-        { id: "utp", categoryId: "p2p", transport: "udp", port: 6881, rank: 1, label: "uTP (BitTorrent)", descriptor: "20-byte SYN frame", fieldSet: [] },
-        { id: "bittorrent_dht", categoryId: "p2p", transport: "udp", port: 6881, rank: 2, label: "BitTorrent DHT", descriptor: "BitTorrent DHT ping query", fieldSet: [] }
+        { id: "dns", categoryId: "discovery", rank: 1, label: "DNS", fieldSet: ["host"] },
+        { id: "mdns", categoryId: "discovery", rank: 2, label: "mDNS", fieldSet: ["host"] },
+        { id: "ssdp", categoryId: "discovery", rank: 3, label: "SSDP", fieldSet: [] },
+        { id: "llmnr", categoryId: "discovery", rank: 4, label: "LLMNR", fieldSet: ["host"] },
+        { id: "nbns", categoryId: "discovery", rank: 5, label: "NBNS", fieldSet: ["host"] },
+        { id: "quic", categoryId: "web", rank: 1, label: "QUIC", fieldSet: ["host"] },
+        { id: "curl_quic", categoryId: "web", rank: 2, label: "cURL", fieldSet: ["host"] }, 
+        { id: "stun", categoryId: "realtime", rank: 1, label: "STUN", fieldSet: ["host"] },
+        { id: "dtls", categoryId: "realtime", rank: 2, label: "DTLS (WebRTC)", fieldSet: ["host"] },
+        { id: "sip", categoryId: "realtime", rank: 3, label: "SIP", fieldSet: ["host", "sipAction"], defaults: { sipAction: "OPTIONS" } },
+        { id: "rtp", categoryId: "realtime", rank: 4, label: "RTP", fieldSet: [] },
+        { id: "rtcp", categoryId: "realtime", rank: 5, label: "RTCP", fieldSet: [] },
+        { id: "coap", categoryId: "iot", rank: 1, label: "CoAP", fieldSet: ["host", "path", "coapMethod"], defaults: { path: "/", coapMethod: "GET" } },
+        { id: "ntp", categoryId: "infra", rank: 1, label: "NTP", fieldSet: [] },
+        { id: "dhcp_discover", categoryId: "infra", rank: 2, label: "DHCP DISCOVER", fieldSet: [] },
+        { id: "utp", categoryId: "p2p", rank: 1, label: "uTP (BitTorrent)", fieldSet: [] },
+        { id: "bittorrent_dht", categoryId: "p2p", rank: 2, label: "BitTorrent DHT", fieldSet: [] }
     ];
-    var PROTOCOL_WIKI_URLS = {
-        dns: "https://en.wikipedia.org/wiki/Domain_Name_System",
-        mdns: "https://en.wikipedia.org/wiki/Multicast_DNS",
-        ssdp: "https://en.wikipedia.org/wiki/Simple_Service_Discovery_Protocol",
-        llmnr: "https://en.wikipedia.org/wiki/Link-Local_Multicast_Name_Resolution",
-        nbns: "https://en.wikipedia.org/wiki/NetBIOS_over_TCP/IP",
-        quic: "https://en.wikipedia.org/wiki/QUIC",
-        tls_client_hello: "https://en.wikipedia.org/wiki/Transport_Layer_Security",
-        http2: "https://en.wikipedia.org/wiki/HTTP/2",
-        http_browser: "https://en.wikipedia.org/wiki/HTTP",
-        websocket: "https://en.wikipedia.org/wiki/WebSocket",
-        curl: "https://en.wikipedia.org/wiki/CURL",
-        stun: "https://en.wikipedia.org/wiki/STUN",
-        dtls: "https://en.wikipedia.org/wiki/Datagram_Transport_Layer_Security",
-        sip: "https://en.wikipedia.org/wiki/Session_Initiation_Protocol",
-        rtp: "https://en.wikipedia.org/wiki/Real-time_Transport_Protocol",
-        rtcp: "https://en.wikipedia.org/wiki/RTP_Control_Protocol",
-        coap: "https://en.wikipedia.org/wiki/Constrained_Application_Protocol",
-        mqtt: "https://en.wikipedia.org/wiki/MQTT",
-        ntp: "https://en.wikipedia.org/wiki/Network_Time_Protocol",
-        dhcp_discover: "https://en.wikipedia.org/wiki/Dynamic_Host_Configuration_Protocol",
-        snmp: "https://en.wikipedia.org/wiki/Simple_Network_Management_Protocol",
-        syslog: "https://en.wikipedia.org/wiki/Syslog",
-        tftp: "https://en.wikipedia.org/wiki/Trivial_File_Transfer_Protocol",
-        radius: "https://en.wikipedia.org/wiki/RADIUS",
-        redis: "https://en.wikipedia.org/wiki/Redis",
-        postgresql: "https://en.wikipedia.org/wiki/PostgreSQL",
-        mysql: "https://en.wikipedia.org/wiki/MySQL",
-        utp: "https://en.wikipedia.org/wiki/Micro_Transport_Protocol",
-        bittorrent_dht: "https://en.wikipedia.org/wiki/Mainline_DHT"
-    };
     var DOMAIN_POOL = [
-        "google.com", "amazon.com", "facebook.com", "reddit.com", "github.com", 
-        "microsoft.com", "apple.com", "cloudflare.com", "openai.com", "instagram.com", 
-        "linkedin.com", "bing.com", "adobe.com", "stackoverflow.com", "mozilla.org", "bbc.com", 
-        "cnn.com", "nytimes.com", "office.com", "dropbox.com", "zoom.us", "spotify.com", "imdb.com", 
+        "google.com", "amazon.com", "reddit.com", "github.com", "mozilla.org",
+        "microsoft.com", "apple.com", "cloudflare.com", "bing.com", "adobe.com", "stackoverflow.com", 
+        "office.com", "dropbox.com", "zoom.us", "spotify.com", "imdb.com", 
         "wikipedia.org", "yandex.ru", "ozon.ru", "vk.com", "google.com", "gismeteo.ru", "mail.ru", 
         "kinopoisk.ru", "pinterest.com", "dzen.ru", "rutube.ru", "gdz.ru", "apple.com", "rbc.ru", 
         "wildberries.ru", "asna.ru", "ya.ru", "vidal.ru", "banki.ru", "sberbank.ru", "ria.ru", "tbank.ru", 
@@ -289,10 +232,7 @@
     };
     var SELECTORS = {
         payloadTitle: ".payload-title",
-        payloadMeta: ".payload-meta",
         payloadProtocol: ".payload-protocol",
-        payloadProtocolSummary: ".protocol-summary",
-        payloadProtocolLink: ".protocol-link",
         payloadRemoveButton: ".remove-payload-btn",
         payloadDynamicFields: ".payload-dynamic-fields",
         payloadError: ".payload-error"
@@ -433,22 +373,17 @@
     function createPayloadBlock(initialState) {
         var block = createElement("article", { className: "payload-block" });
         var title = createElement("h3", { className: "payload-title" });
-        var meta = createElement("p", { className: "payload-meta" });
         var protocolSelect = createElement("select", { className: "payload-protocol" });
-        var protocolSummary = createElement("p", { className: "protocol-summary" });
-        var protocolLink = createElement("a", { className: "protocol-link", href: "#", target: "_blank", rel: "noreferrer noopener" });
         var dynamicFields = createElement("div", { className: "field-grid payload-dynamic-fields" });
         var error = createElement("p", { className: "payload-error" });
 
         block._state = hydrateBlockState(initialState);
         error.setAttribute("aria-live", "polite");
         block.appendChild(createBlockHeader(block, title));
-        block.appendChild(meta);
         block.appendChild(createElement("div", {
             className: "field-grid payload-static-fields",
             children: [createField(UI.protocolLabel, protocolSelect, "field")]
         }));
-        block.appendChild(createElement("div", { className: "protocol-info", children: [protocolSummary, protocolLink] }));
         block.appendChild(dynamicFields);
         block.appendChild(error);
 
@@ -499,14 +434,7 @@
         protocol.fieldSet.forEach(function (fieldId) {
             refs.dynamicFields.appendChild(createDynamicField(block, protocol, fieldId));
         });
-        refs.protocolSelect.title = formatProtocolSummary(protocol);
-        refs.protocolSummary.textContent = formatProtocolSummary(protocol);
-        refs.protocolLink.textContent = UI.wikiLinkLabel;
-        refs.protocolLink.href = PROTOCOL_WIKI_URLS[protocol.id] || "#";
-        refs.protocolLink.title = formatProtocolSummary(protocol);
         refs.removeButton.textContent = UI.removeButton;
-        refs.meta.textContent = "";
-        refs.meta.hidden = true;
         updateBlockUi();
     }
 
@@ -647,8 +575,7 @@
             group.protocols.forEach(function (protocol) {
                 optgroup.appendChild(createElement("option", {
                     value: protocol.id,
-                    textContent: protocol.id === "quic" ? protocol.label + " ★" : protocol.label,
-                    title: protocol.descriptor
+                    textContent: isQuicLikeProtocolId(protocol.id) ? protocol.label + " ★" : protocol.label
                 }));
             });
 
@@ -669,6 +596,10 @@
         dom.addButton.disabled = getBlockCount() >= CONFIG.maxBlocks;
     }
 
+    function isQuicLikeProtocolId(protocolId) {
+        return protocolId === "quic" || protocolId === "curl_quic";
+    }
+
     function generateOutput() {
         var mtu = normalizeMtu(dom.mtuInput.value);
         var padMtu = !!dom.padMtuCheckbox.checked;
@@ -679,7 +610,7 @@
         clearAllErrors();
 
         getBlocks().forEach(function (block) {
-            if (block._state.protocolId === "quic" && shouldUseAsyncQuicOutput(collectProtocolOptions(block, mtu, padMtu))) {
+            if (isQuicLikeProtocolId(block._state.protocolId) && shouldUseAsyncQuicOutput(collectProtocolOptions(block, mtu, padMtu))) {
                 hasAsyncProtocols = true;
             }
         });
@@ -745,7 +676,7 @@
     async function appendBlockLinesAsync(lines, block, mtu, padMtu) {
         var generators = ensureGenerators();
         var options = collectProtocolOptions(block, mtu, padMtu);
-        var payloadBytes = block._state.protocolId === "quic" && shouldUseAsyncQuicOutput(options) && typeof generators.generatePayloadAsync === "function"
+        var payloadBytes = isQuicLikeProtocolId(block._state.protocolId) && shouldUseAsyncQuicOutput(options) && typeof generators.generatePayloadAsync === "function"
             ? await generators.generatePayloadAsync(block._state.protocolId, options)
             : generators.generatePayload(block._state.protocolId, options);
 
@@ -774,7 +705,7 @@
             options.browserVersion = getChromeDefaultVersion();
         }
 
-        if (protocol.id === "quic") {
+        if (isQuicLikeProtocolId(protocol.id)) {
             options.quicEncrypt = true;
             options.quicMtu = mtu;
             options.quicPadToMtu = !!padMtu;
@@ -808,7 +739,7 @@
             return false;
         }
 
-        return !(protocolId === "quic" && options && options.quicPadToMtu && options.quicEncrypt);
+        return !(isQuicLikeProtocolId(protocolId) && options && options.quicPadToMtu && options.quicEncrypt);
     }
 
     function copyOutput() {
@@ -853,10 +784,7 @@
     function getBlockRefs(block) {
         return {
             title: block.querySelector(SELECTORS.payloadTitle),
-            meta: block.querySelector(SELECTORS.payloadMeta),
             protocolSelect: block.querySelector(SELECTORS.payloadProtocol),
-            protocolSummary: block.querySelector(SELECTORS.payloadProtocolSummary),
-            protocolLink: block.querySelector(SELECTORS.payloadProtocolLink),
             removeButton: block.querySelector(SELECTORS.payloadRemoveButton),
             dynamicFields: block.querySelector(SELECTORS.payloadDynamicFields),
             error: block.querySelector(SELECTORS.payloadError)
@@ -1081,18 +1009,6 @@
         }
 
         return hex;
-    }
-
-    function formatProtocolSummary(protocol) {
-        var transport = protocol.transport === "tcp" ? "TCP" : "UDP";
-        var summary = String(protocol.descriptor || "").trim();
-        var portInfo = protocol.port ? "port: " + protocol.port + " | " : "";
-
-        if (summary && summary.charAt(summary.length - 1) !== ".") {
-            summary += ".";
-        }
-
-        return transport + " | " + portInfo + summary;
     }
 
     return {
