@@ -190,6 +190,53 @@
         );
     }
 
+    function resolveQuicTargetPacketSize(options) {
+        var mtu = options ? Number(options.quicMtu) : NaN;
+
+        if (options && options.quicPadToMtu && Number.isFinite(mtu) && mtu > 0) {
+            return Math.max(1200, Math.floor(mtu));
+        }
+
+        return 1200;
+    }
+
+    function calculateQuicInitialPaddingLength(payloadLength, dcidLength, scidLength, packetNumberLength, targetPacketSize, authTagLength) {
+        var normalizedTarget = Number.isFinite(targetPacketSize) && targetPacketSize > 0 ? Math.floor(targetPacketSize) : 1200;
+        var packetTagLength = Number.isFinite(authTagLength) && authTagLength > 0 ? Math.floor(authTagLength) : 0;
+        var headerPrefixLength = 1 + 4 + 1 + dcidLength + 1 + scidLength + 1;
+        var payloadWithProtectionLength = packetNumberLength + payloadLength + packetTagLength;
+        var lengthFieldSize = encodeQuicVarInt(payloadWithProtectionLength).length;
+        var previousLengthFieldSize = -1;
+        var paddingNeeded = 0;
+
+        normalizedTarget = Math.max(1200, normalizedTarget);
+
+        while (lengthFieldSize !== previousLengthFieldSize) {
+            previousLengthFieldSize = lengthFieldSize;
+            paddingNeeded = Math.max(0, normalizedTarget - (headerPrefixLength + lengthFieldSize + payloadWithProtectionLength));
+            lengthFieldSize = encodeQuicVarInt(payloadWithProtectionLength + paddingNeeded).length;
+        }
+
+        return Math.max(0, normalizedTarget - (headerPrefixLength + lengthFieldSize + payloadWithProtectionLength));
+    }
+
+    function padQuicInitialPayload(payload, dcid, scid, packetNumber, options, authTagLength) {
+        var paddingNeeded = calculateQuicInitialPaddingLength(
+            payload.length,
+            dcid.length,
+            scid.length,
+            packetNumber.length,
+            resolveQuicTargetPacketSize(options),
+            authTagLength
+        );
+
+        if (paddingNeeded > 0) {
+            return concatBytes(payload, zeroBytes(paddingNeeded));
+        }
+
+        return payload;
+    }
+
     function buildPlainQuicInitialPacket(version, dcid, scid, packetNumber, payload) {
         var packetLength = packetNumber.length + payload.length;
         return concatBytes(
@@ -250,7 +297,7 @@
         var payload = cryptoFrame;
 
         if (options.quicEncrypt) {
-            payload = concatBytes(cryptoFrame, zeroBytes(Math.max(0, 1200 - (1 + 4 + 1 + dcid.length + 1 + scid.length + 1 + 2 + packetNumber.length + cryptoFrame.length))));
+            payload = padQuicInitialPayload(cryptoFrame, dcid, scid, packetNumber, options, 0);
         }
 
         return buildPlainQuicInitialPacket(version, dcid, scid, packetNumber, payload);
@@ -275,14 +322,7 @@
         }
 
         try {
-            var headerSize = 1 + 4 + 1 + dcid.length + 1 + scid.length + 1 + 2 + packetNumber.length + 16;
-            var targetSize = 1200;
-            var currentPayloadSize = cryptoFrame.length;
-            var paddingNeeded = Math.max(0, targetSize - headerSize - currentPayloadSize);
-
-            if (paddingNeeded > 0) {
-                payload = concatBytes(cryptoFrame, new Uint8Array(paddingNeeded));
-            }
+            payload = padQuicInitialPayload(cryptoFrame, dcid, scid, packetNumber, options, 16);
 
             return await buildProtectedQuicInitialPacket(version, dcid, scid, packetNumber, payload);
         } catch (error) {

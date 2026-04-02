@@ -666,7 +666,7 @@
         clearAllErrors();
 
         getBlocks().forEach(function (block) {
-            if (block._state.protocolId === "quic" && shouldUseAsyncQuicOutput(collectProtocolOptions(block))) {
+            if (block._state.protocolId === "quic" && shouldUseAsyncQuicOutput(collectProtocolOptions(block, mtu, padMtu))) {
                 hasAsyncProtocols = true;
             }
         });
@@ -725,20 +725,21 @@
     }
 
     function appendBlockLines(lines, block, mtu, padMtu) {
-        return appendChunkLines(lines, chunkPayload(ensureGenerators().generatePayload(block._state.protocolId, collectProtocolOptions(block)), mtu, padMtu));
+        var options = collectProtocolOptions(block, mtu, padMtu);
+        return appendChunkLines(lines, chunkPayload(ensureGenerators().generatePayload(block._state.protocolId, options), mtu, shouldPadOutputChunks(block._state.protocolId, options, padMtu)));
     }
 
     async function appendBlockLinesAsync(lines, block, mtu, padMtu) {
         var generators = ensureGenerators();
-        var options = collectProtocolOptions(block);
+        var options = collectProtocolOptions(block, mtu, padMtu);
         var payloadBytes = block._state.protocolId === "quic" && shouldUseAsyncQuicOutput(options) && typeof generators.generatePayloadAsync === "function"
             ? await generators.generatePayloadAsync(block._state.protocolId, options)
             : generators.generatePayload(block._state.protocolId, options);
 
-        return appendChunkLines(lines, chunkPayload(payloadBytes, mtu, padMtu));
+        return appendChunkLines(lines, chunkPayload(payloadBytes, mtu, shouldPadOutputChunks(block._state.protocolId, options, padMtu)));
     }
 
-    function collectProtocolOptions(block) {
+    function collectProtocolOptions(block, mtu, padMtu) {
         var protocol = getProtocolMeta(block._state.protocolId);
         var options = {};
 
@@ -762,6 +763,8 @@
 
         if (protocol.id === "quic") {
             options.quicEncrypt = true;
+            options.quicMtu = mtu;
+            options.quicPadToMtu = !!padMtu;
         }
 
         return options;
@@ -785,6 +788,14 @@
 
     function shouldUseAsyncQuicOutput(options) {
         return !!(options && options.quicEncrypt);
+    }
+
+    function shouldPadOutputChunks(protocolId, options, padMtu) {
+        if (!padMtu) {
+            return false;
+        }
+
+        return !(protocolId === "quic" && options && options.quicPadToMtu && options.quicEncrypt);
     }
 
     function copyOutput() {
