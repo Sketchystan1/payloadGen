@@ -1,5 +1,9 @@
 (function (root, factory) {
-    var data = root.PayloadGenData || (typeof require === "function" ? require("./data.js") : null);
+    var data = root.PayloadGenData;
+    if (!data && typeof require === "function") {
+        require("./app.js");
+        data = root.PayloadGenData || null;
+    }
     var crypto = root.PayloadGenCrypto || (typeof require === "function" ? require("./crypto.js") : null);
     var api = factory(root, data, crypto);
 
@@ -18,8 +22,7 @@
     }
 
     var CONFIG = Data.CONFIG;
-    var BROWSER_PROFILES = Data.BROWSER_PROFILES;
-    var BROWSER_USER_AGENTS = Data.BROWSER_USER_AGENTS;
+    var CHROME_BROWSER_DATA = Data.CHROME_BROWSER_DATA;
     var CURL_USER_AGENTS = Data.CURL_USER_AGENTS;
     var SSDP_SEARCH_TARGETS = Data.SSDP_SEARCH_TARGETS;
     var LATEST_QUIC_VERSION = Data.LATEST_QUIC_VERSION;
@@ -32,8 +35,8 @@
     var NBNS_SUFFIX_OPTIONS = [0x00, 0x20];
     var SSDP_USER_AGENTS = [
         "Microsoft-Windows/10.0 UPnP/1.0 SSDP-Discovery/1.0",
-        "macOS/15.4 UPnP/1.1 ControlPoint/1.0",
-        "Linux/6.8 UPnP/1.1 PayloadGen/1.0"
+        "macOS/14.7.6 UPnP/1.1 ControlPoint/1.0",
+        "Linux/6.8 UPnP/1.1 Portable SDK for UPnP devices/1.14.18"
     ];
     var STUN_SOFTWARE_NAMES = [
         "Chrome WebRTC ICE agent",
@@ -51,67 +54,25 @@
         "1.3.6.1.2.1.1.5.0",
         "1.3.6.1.2.1.25.1.1.0"
     ];
-    var SYSLOG_APP_NAMES = ["payloadgen", "systemd", "sshd", "NetworkManager"];
-    var BROWSER_RUNTIME_PROFILES = {
-        chrome: {
-            platform: "Windows",
-            userAgentTemplate: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{version} Safari/537.36",
-            acceptLanguage: "en-US,en;q=0.9",
-            acceptEncoding: "gzip, deflate, br, zstd",
-            websocketExtensions: "permessage-deflate; client_max_window_bits",
-            secChUaBrands: ["Chromium", "Google Chrome", "Not=A?Brand"],
-            http2Settings: [
-                { id: 0x0001, value: 65536 },
-                { id: 0x0003, value: 1000 },
-                { id: 0x0004, value: 6291456 },
-                { id: 0x0006, value: 262144 }
-            ]
-        },
-        firefox: {
-            platform: "Windows",
-            userAgentTemplate: "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:{version}) Gecko/20100101 Firefox/{version}",
-            acceptLanguage: "en-US,en;q=0.5",
-            acceptEncoding: "gzip, deflate, br, zstd",
-            websocketExtensions: "permessage-deflate",
-            secChUaBrands: [],
-            http2Settings: [
-                { id: 0x0001, value: 65536 },
-                { id: 0x0004, value: 131072 },
-                { id: 0x0005, value: 16384 }
-            ]
-        },
-        safari: {
-            platform: "macOS",
-            userAgentTemplate: "Mozilla/5.0 (Macintosh; Intel Mac OS X 15_4) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/{version} Safari/605.1.15",
-            acceptLanguage: "en-US",
-            acceptEncoding: "gzip, deflate, br",
-            websocketExtensions: "permessage-deflate; client_max_window_bits",
-            secChUaBrands: [],
-            http2Settings: [
-                { id: 0x0001, value: 65536 },
-                { id: 0x0004, value: 1048576 },
-                { id: 0x0006, value: 262144 }
-            ]
-        },
-        edge: {
-            platform: "Windows",
-            userAgentTemplate: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.7680.154 Safari/537.36 Edg/{version}",
-            acceptLanguage: "en-US,en;q=0.9",
-            acceptEncoding: "gzip, deflate, br, zstd",
-            websocketExtensions: "permessage-deflate; client_max_window_bits",
-            secChUaBrands: ["Chromium", "Microsoft Edge", "Not=A?Brand"],
-            http2Settings: [
-                { id: 0x0001, value: 65536 },
-                { id: 0x0003, value: 1000 },
-                { id: 0x0004, value: 6291456 },
-                { id: 0x0006, value: 262144 }
-            ]
-        }
+    var SYSLOG_APP_NAMES = ["systemd", "sshd", "NetworkManager", "dnsmasq"];
+    var SYSLOG_HOST_NAMES = ["edge-gw-01", "core-sw-02", "media-host", "workstation-15"];
+    var MQTT_CLIENT_ID_PREFIXES = ["mqttjs_", "paho-", "esp32-", "sensor-"];
+    var SIP_USER_AGENT = "Linphone/5.2.5 (belle-sip/5.3.90)";
+    var CHROME_RUNTIME_PROFILE = {
+        platform: "Windows",
+        userAgentTemplate: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{uaVersion} Safari/537.36",
+        acceptLanguage: "en-US,en;q=0.9",
+        acceptEncoding: "gzip, deflate, br, zstd",
+        websocketExtensions: "permessage-deflate; client_max_window_bits",
+        secChUaBrands: ["Not)A;Brand", "Chromium", "Google Chrome"],
+        http2Settings: [
+            { id: 0x0001, value: 65536 },
+            { id: 0x0003, value: 1000 },
+            { id: 0x0004, value: 6291456 },
+            { id: 0x0006, value: 262144 }
+        ]
     };
-    var QUIC_VERSION_DEFS = {
-        v1: { value: "v1", wireValue: 0x00000001, initialHeaderBase: 0xC0 },
-        v2: { value: "v2", wireValue: 0x6B3343CF, initialHeaderBase: 0xD0 }
-    };
+    var QUIC_VERSION_DEF = { wireValue: LATEST_QUIC_VERSION, initialHeaderBase: 0xC0 };
     var textEncoder = createTextEncoder();
     var hasCrypto = !!Crypto;
 
@@ -213,7 +174,6 @@
             legacyVersion: 0x0303,
             withTls13: true,
             alpnProtocol: "h3",
-            browserProfile: options.browserProfile,
             browserVersion: options.browserVersion,
             withQuicTransportParameters: true,
             quicSourceConnectionId: scid
@@ -279,111 +239,9 @@
         return concatBytes(headerForAad, encrypted);
     }
 
-    function normalizeQuicAwgLevel(level) {
-        var normalized = String(level == null ? "" : level).trim().toLowerCase();
-
-        if (!normalized || normalized === "off") {
-            return null;
-        }
-
-        var cutLevel = parseInt(normalized, 10);
-        return Number.isFinite(cutLevel) && cutLevel >= 0 ? cutLevel : 0;
-    }
-
-    function buildQuicAwgPayload(clientHello, level) {
-        var cutLevel = normalizeQuicAwgLevel(level);
-        var payload;
-        var cutSettings;
-        var clientHelloBytes = clientHello instanceof Uint8Array ? clientHello : new Uint8Array(clientHello);
-
-        if (cutLevel == null) {
-            throw new Error("AWG segmented QUIC output is disabled for this payload.");
-        }
-
-        if (cutLevel === 0) {
-            payload = buildQuicCryptoFrame(clientHelloBytes, 0);
-            var dataOffset = payload.length - clientHelloBytes.length;
-            cutSettings = [dataOffset + 6, 32, clientHelloBytes.length - 38, 16];
-        } else {
-            var cutPresets = {
-                1: [38, Infinity, 0, 38, 32, false],
-                2: [38, Infinity, 0, 38, 37, false],
-                3: [0, 1, 38, Infinity, 0, false],
-                4: [0, 1, 38, Infinity, 0, true]
-            };
-            var cutPreset = cutPresets[cutLevel] || cutPresets[1];
-            var p1s = cutPreset[0];
-            var p1e = cutPreset[1];
-            var p2s = cutPreset[2];
-            var p2e = cutPreset[3];
-            var dropTail = cutPreset[4];
-            var skipZeroes = cutPreset[5];
-
-            if (skipZeroes) {
-                while (p2s < clientHelloBytes.length && clientHelloBytes[p2s] === 0) {
-                    p2s += 1;
-                }
-            }
-
-            payload = concatBytes(
-                buildQuicCryptoFrame(sliceBytes(clientHelloBytes, p1s, p1e), p1s),
-                buildQuicCryptoFrame(sliceBytes(clientHelloBytes, p2s, p2e), p2s)
-            );
-            cutSettings = [payload.length - dropTail, 16 + dropTail];
-        }
-
-        return {
-            payload: payload,
-            cutSettings: cutSettings
-        };
-    }
-
-    function fixQuicAwgCutSettings(cutSettings, packetLength, packetNumberLength, payloadLength) {
-        if (cutSettings[0] < 20 - packetNumberLength) {
-            var toAdd = 20 - packetNumberLength - cutSettings[0];
-            cutSettings[0] += toAdd;
-            cutSettings[1] -= toAdd;
-        }
-
-        cutSettings[0] += packetLength - payloadLength - 16;
-    }
-
-    function formatQuicAwg(buffer, parts, includeFirst) {
-        var include = includeFirst !== false;
-        var offset = 0;
-        var index;
-        var result = "";
-
-        if (!parts || !parts.length) {
-            return "<b 0x" + bytesToHex(buffer) + ">";
-        }
-
-        for (index = 0; index < parts.length; index += 1) {
-            var part = parts[index];
-
-            if (part > 0) {
-                if (include) {
-                    result += "<b 0x" + bytesToHex(sliceBytes(buffer, offset, offset + part)) + ">";
-                } else {
-                    result += "<r " + part + ">";
-                }
-
-                offset += part;
-            }
-
-            include = !include;
-        }
-
-        return result;
-    }
-
-    function sliceBytes(bytes, start, end) {
-        return bytes.slice(start, end === Infinity ? bytes.length : end);
-    }
-
     // Synchronous QUIC payload fallback when authenticated QUIC protection is unavailable.
     function generateQuicPayload(options) {
-        var version = resolveQuicVersion(options.quicVersion);
+        var version = QUIC_VERSION_DEF;
         var dcid = randomBytes(8);
         var scid = randomBytes(8);
         var packetNumber = randomBytes(4);
@@ -399,14 +257,12 @@
     }
 
     // Async QUIC payload with proper QUIC Initial encryption.
-    // RFC 9001 applies to QUIC v1; RFC 9369 adjusts the v2 wire version,
-    // Initial salt, HKDF labels, and long-header packet type bits.
     async function generateQuicPayloadAsync(options) {
         if (!hasCrypto) {
             return generateQuicPayload(options);
         }
 
-        var version = resolveQuicVersion(options.quicVersion);
+        var version = QUIC_VERSION_DEF;
         var dcid = randomBytes(8);
         var scid = randomBytes(8);
         var packetNumber = randomBytes(4);
@@ -435,39 +291,11 @@
         }
     }
 
-    async function generateQuicAwgSignaturePartsAsync(options) {
-        if (!hasCrypto) {
-            throw new Error("AWG segmented QUIC output requires WebCrypto support.");
-        }
-
-        var version = resolveQuicVersion(options.quicVersion);
-        var dcid = randomBytes(8);
-        var scid = randomBytes(8);
-        var packetNumber = randomBytes(4);
-        var clientHello = buildQuicClientHello(options.host, options, scid);
-        var awgPayload = buildQuicAwgPayload(clientHello, options.quicAwgLevel);
-        var packetBytes = await buildProtectedQuicInitialPacket(version, dcid, scid, packetNumber, awgPayload.payload);
-        var cutSettings = awgPayload.cutSettings.slice();
-
-        fixQuicAwgCutSettings(cutSettings, packetBytes.length, packetNumber.length, awgPayload.payload.length);
-
-        return {
-            expression: formatQuicAwg(packetBytes, cutSettings, true),
-            packetLength: packetBytes.length
-        };
-    }
-
-    async function generateQuicAwgSignatureAsync(options) {
-        var parts = await generateQuicAwgSignaturePartsAsync(options);
-        return parts.expression;
-    }
-
     function generateTlsClientHelloPayload(options) {
         var handshake = buildClientHelloBody(options.host, {
             legacyVersion: 0x0303,
             withTls13: true,
             alpnProtocol: options.tlsAlpn,
-            browserProfile: options.browserProfile,
             browserVersion: options.browserVersion,
             withQuicTransportParameters: false
         });
@@ -481,7 +309,7 @@
     }
 
     function generateHttp2Payload(options) {
-        var browser = resolveBrowserProfile(options.browserProfile, options.browserVersion);
+        var browser = resolveBrowserProfile(options.browserVersion);
         var settingsBytes = concatBytes.apply(null, browser.http2Settings.map(function (setting) {
             return concatBytes(u16(setting.id), u32(setting.value));
         }));
@@ -495,7 +323,7 @@
     }
 
     function generateHttpBrowserPayload(options) {
-        var browser = resolveBrowserProfile(options.browserProfile, options.browserVersion);
+        var browser = resolveBrowserProfile(options.browserVersion);
         var target = withRandomQuery(options.path, options.randomQuery);
         var headers = buildBrowserRequestHeaders(browser, options.host, target, false);
         var browserMessage = headers.join("\r\n") + "\r\n\r\n";
@@ -504,7 +332,7 @@
     }
 
     function generateWebsocketPayload(options) {
-        var browser = resolveBrowserProfile(options.browserProfile, options.browserVersion);
+        var browser = resolveBrowserProfile(options.browserVersion);
         var websocketMessage = buildBrowserWebsocketRequest(browser, options.host, options.path).join("\r\n") + "\r\n\r\n";
 
         return encodeText(websocketMessage);
@@ -584,24 +412,32 @@
     }
 
     function generateSipPayload(options) {
-        var action = options.sipAction;
-        var branch = randomInt31();
-        var tag = randomInt31();
-        var callId = randomInt31();
-        var requestUri = action === "REGISTER" ? "sip:" + options.host : "sip:user@" + options.host;
+        var host = normalizeHost(options.host);
+        var action = options.sipAction === "REGISTER" ? "REGISTER" : "OPTIONS";
+        var localIp = randomPrivateIpv4();
+        var localPort = 5060;
+        var sipUser = String(1000 + randomIntExclusive(9000));
+        var branch = "z9hG4bK" + bytesToHex(randomBytes(7));
+        var tag = bytesToHex(randomBytes(5));
+        var callId = bytesToHex(randomBytes(10)) + "@" + localIp;
+        var toUri = "<sip:" + sipUser + "@" + host + ">";
+        var requestUri = action === "REGISTER" ? "sip:" + host : "sip:" + sipUser + "@" + host;
         var lines = [
             action + " " + requestUri + " SIP/2.0",
-            "Via: SIP/2.0/UDP 192.0.2." + (10 + randomIntExclusive(80)) + ":5060;branch=z9hG4bK-" + branch + ";rport",
+            "Via: SIP/2.0/UDP " + localIp + ":" + localPort + ";branch=" + branch + ";rport",
             "Max-Forwards: 70",
-            "From: \"PayloadGen\" <sip:user@" + options.host + ">;tag=" + tag,
-            "To: <sip:user@" + options.host + ">",
-            "Call-ID: " + callId + "@" + options.host,
+            "From: <sip:" + sipUser + "@" + host + ">;tag=" + tag,
+            "To: " + toUri,
+            "Call-ID: " + callId,
             "CSeq: 1 " + action,
-            "Contact: <sip:user@192.0.2." + (10 + randomIntExclusive(80)) + ":5060;transport=udp>",
-            "Allow: INVITE, ACK, CANCEL, OPTIONS, BYE, REFER, NOTIFY, MESSAGE, SUBSCRIBE, INFO",
-            "Supported: replaces, timer, path",
-            "User-Agent: PayloadGen Softphone/1.0",
-            action === "REGISTER" ? "Expires: 600" : "Accept: application/sdp",
+            "Contact: <sip:" + sipUser + "@" + localIp + ":" + localPort + ";transport=udp>",
+            "User-Agent: " + SIP_USER_AGENT,
+            "Allow: INVITE, ACK, CANCEL, OPTIONS, BYE, REFER, NOTIFY, INFO, MESSAGE, SUBSCRIBE",
+            action === "REGISTER"
+                ? "Supported: replaces, outbound, gruu, path"
+                : "Supported: replaces, outbound, path, timer",
+            action === "REGISTER" ? "Allow-Events: presence, message-summary, refer" : "Accept: application/sdp",
+            action === "REGISTER" ? "Expires: 600" : "Accept-Language: en",
             "Content-Length: 0",
             "",
             ""
@@ -637,7 +473,7 @@
             u32(1 + randomIntExclusive(64)),
             u32(160 + randomIntExclusive(4096))
         );
-        var cname = encodeText("payloadgen@" + CONFIG.defaultHost);
+        var cname = encodeText("webrtc@" + CONFIG.defaultHost);
         var sdesValue = concatBytes(
             u32(ssrc),
             Uint8Array.from([0x01, cname.length]),
@@ -659,7 +495,7 @@
         var isPost = options.coapMethod === "POST";
         var code = isPost ? 0x02 : 0x01;
         var requestOptions = buildCoapOptions(options.host, options.path, isPost);
-        var payload = isPost ? concatBytes(Uint8Array.from([0xFF]), encodeText("{\"probe\":\"payloadgen\"}")) : zeroBytes(0);
+        var payload = isPost ? concatBytes(Uint8Array.from([0xFF]), encodeText("{\"status\":\"ok\"}")) : zeroBytes(0);
 
         return concatBytes(
             Uint8Array.from([(randomIntExclusive(2) === 0 ? 0x40 : 0x50) | token.length, code]),
@@ -671,7 +507,7 @@
     }
 
     function generateMqttPayload(options) {
-        var clientId = String(options.clientId || "").trim() || ("payloadgen-" + bytesToHex(randomBytes(2)));
+        var clientId = String(options.clientId || "").trim() || (randomItem(MQTT_CLIENT_ID_PREFIXES) + bytesToHex(randomBytes(3)));
         var protocolLevel = randomItem([0x04, 0x05]);
         var connectFlags = 0x02;
         var properties = protocolLevel === 0x05 ? concatBytes(
@@ -769,12 +605,13 @@
         var severityCode = getSyslogSeverityCode(options.syslogSeverity);
         var pri = facilityCode * 8 + severityCode;
         var appName = randomItem(SYSLOG_APP_NAMES);
+        var hostName = randomItem(SYSLOG_HOST_NAMES);
 
         if (randomIntExclusive(2) === 0) {
-            return encodeText("<" + pri + ">1 " + new Date().toISOString() + " payloadgen.local " + appName + " " + (100 + randomIntExclusive(900)) + " MSG" + randomIntExclusive(1000) + " - " + options.message);
+            return encodeText("<" + pri + ">1 " + new Date().toISOString() + " " + hostName + " " + appName + " " + (100 + randomIntExclusive(900)) + " MSG" + randomIntExclusive(1000) + " - " + options.message);
         }
 
-        return encodeText("<" + pri + ">" + formatSyslogTimestamp(new Date()) + " payloadgen " + appName + ": " + options.message);
+        return encodeText("<" + pri + ">" + formatSyslogTimestamp(new Date()) + " " + hostName + " " + appName + ": " + options.message);
     }
 
     function generateTftpPayload(options) {
@@ -793,13 +630,14 @@
     function generateRadiusPayload(options) {
         var usernameBytes = encodeText(options.username || "user");
         var nasIp = Uint8Array.from([192, 0, 2, 20 + randomIntExclusive(50)]);
+        var nasIdentifier = "edge-ap-" + (10 + randomIntExclusive(90));
         var attributes = concatBytes(
             buildRadiusAttribute(0x01, usernameBytes),
             buildRadiusAttribute(0x04, nasIp),
             buildRadiusAttribute(0x05, u32(1 + randomIntExclusive(16))),
             buildRadiusAttribute(0x06, u32(2)),
-            buildRadiusAttribute(0x20, encodeText("payloadgen-nas")),
-            buildRadiusAttribute(0x1E, encodeText("payloadgen"))
+            buildRadiusAttribute(0x20, encodeText(nasIdentifier)),
+            buildRadiusAttribute(0x1E, encodeText("wlan"))
         );
 
         return concatBytes(
@@ -811,12 +649,12 @@
     }
 
     function generateRedisPayload() {
-        var token = "payloadgen-" + bytesToHex(randomBytes(3));
+        var token = "client-" + bytesToHex(randomBytes(3));
 
         if (randomIntExclusive(2) === 0) {
             return encodeText(
                 "*2\r\n$5\r\nHELLO\r\n$1\r\n3\r\n" +
-                "*4\r\n$6\r\nCLIENT\r\n$7\r\nSETINFO\r\n$8\r\nLIB-NAME\r\n$10\r\npayloadgen\r\n" +
+                "*4\r\n$6\r\nCLIENT\r\n$7\r\nSETINFO\r\n$8\r\nLIB-NAME\r\n$9\r\nredis-cli\r\n" +
                 "*2\r\n$4\r\nPING\r\n$" + token.length + "\r\n" + token + "\r\n"
             );
         }
@@ -825,7 +663,7 @@
     }
 
     function generatePostgresqlPayload(options) {
-        var applicationName = "payloadgen-" + bytesToHex(randomBytes(3));
+        var applicationName = "psql";
         var body = concatBytes(
             u32(196608),
             encodeText("user"),
@@ -899,12 +737,8 @@
         );
     }
 
-    function maskQuicCryptoBody(bytes) {
-        return randomBytes(bytes.length);
-    }
-
     function buildClientHelloBody(host, options) {
-        var browser = resolveBrowserProfile(options.browserProfile, options.browserVersion);
+        var browser = resolveBrowserProfile(options.browserVersion);
         var isQuic = !!options.withQuicTransportParameters;
         var fingerprint = resolveTlsFingerprint(browser, isQuic, options.alpnProtocol);
         var greaseValue = fingerprint.useGrease ? selectGreaseValue() : null;
@@ -1267,21 +1101,20 @@
         return concatBytes.apply(null, parts);
     }
 
-    function resolveBrowserProfile(profileId, browserVersion) {
-        var normalizedId = Object.prototype.hasOwnProperty.call(BROWSER_PROFILES, profileId) ? profileId : "chrome";
-        var profile = BROWSER_PROFILES[normalizedId] || BROWSER_PROFILES.chrome;
-        var runtime = BROWSER_RUNTIME_PROFILES[normalizedId] || BROWSER_RUNTIME_PROFILES.chrome;
+    function resolveBrowserProfile(browserVersion) {
+        var browserDataProfile = CHROME_BROWSER_DATA || {};
+        var runtime = CHROME_RUNTIME_PROFILE;
         var resolvedVersion = String(browserVersion || "").trim();
 
         if (!resolvedVersion || resolvedVersion.toLowerCase() === "auto") {
-            resolvedVersion = profile.defaultVersion;
+            resolvedVersion = browserDataProfile.defaultVersion;
         }
 
         return {
-            id: normalizedId,
-            tlsStyle: profile.tlsStyle || "chromium",
+            id: "chrome",
+            tlsStyle: "chromium",
             browserVersion: resolvedVersion,
-            majorVersion: parseInt(resolvedVersion.split(".")[0], 10) || parseInt(profile.defaultVersion, 10) || 0,
+            majorVersion: parseInt(resolvedVersion.split(".")[0], 10) || parseInt(browserDataProfile.defaultVersion, 10) || 0,
             platform: runtime.platform,
             acceptLanguage: runtime.acceptLanguage,
             acceptEncoding: runtime.acceptEncoding,
@@ -1289,20 +1122,37 @@
             http2Settings: runtime.http2Settings,
             includeSecChUa: runtime.secChUaBrands.length > 0,
             secChUa: buildSecChUa(runtime.secChUaBrands, parseInt(resolvedVersion.split(".")[0], 10) || 0),
-            userAgent: formatBrowserUserAgent(runtime.userAgentTemplate, resolvedVersion),
-            acceptHeader: normalizedId === "safari"
-                ? "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
-                : "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8"
+            userAgent: formatBrowserUserAgent(runtime.userAgentTemplate, resolvedVersion, browserDataProfile),
+            acceptHeader: "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8"
         };
     }
 
-    function formatBrowserUserAgent(template, version) {
-        return String(template || randomItem(BROWSER_USER_AGENTS)).replace(/\{version\}/g, version);
+    function getReducedChromiumVersion(version, fallback) {
+        var majorVersion = parseInt(String(version || "").split(".")[0], 10);
+
+        if (Number.isFinite(majorVersion) && majorVersion > 0) {
+            return majorVersion + ".0.0.0";
+        }
+
+        return String(fallback || "0.0.0.0");
+    }
+
+    function formatBrowserUserAgent(template, version, browserDataProfile) {
+        var fallbackUserAgent = CHROME_BROWSER_DATA ? CHROME_BROWSER_DATA.userAgent : "";
+        var resolvedVersion = String(version || "").trim();
+        var dataProfile = browserDataProfile || {};
+        var defaultVersion = String(dataProfile.defaultVersion || "").trim();
+
+        if (fallbackUserAgent && resolvedVersion && resolvedVersion === defaultVersion) {
+            return fallbackUserAgent;
+        }
+
+        return String(template || "").replace(/\{uaVersion\}/g, getReducedChromiumVersion(resolvedVersion, dataProfile.uaVersion));
     }
 
     function buildSecChUa(brands, majorVersion) {
         return (brands || []).map(function (brand) {
-            var version = brand === "Not=A?Brand" ? 99 : (majorVersion || 0);
+            var version = /^Not/i.test(brand) ? 99 : (majorVersion || 0);
             return "\"" + brand + "\";v=\"" + version + "\"";
         }).join(", ");
     }
@@ -1530,7 +1380,7 @@
 
     function resolveTlsFingerprint(browser, isQuic) {
         var defaultSignatureAlgorithms = [0x0403, 0x0804, 0x0401, 0x0503, 0x0805, 0x0501, 0x0806, 0x0601, 0x0807];
-        var chromiumFingerprint = {
+        return {
             useGrease: true,
             useSecondaryGrease: true,
             cipherSuites: isQuic
@@ -1549,52 +1399,6 @@
             maxUdpPayloadSize: 1472,
             activeConnectionIdLimit: 8
         };
-
-        if (browser.tlsStyle === "firefox") {
-            return {
-                useGrease: false,
-                useSecondaryGrease: false,
-                cipherSuites: isQuic
-                    ? [0x1301, 0x1303, 0x1302]
-                    : [0x1301, 0x1303, 0x1302, 0xC02B, 0xC02F, 0xCCA9, 0xCCA8, 0xC02C, 0xC030, 0x009C, 0x009D, 0x002F, 0x0035],
-                extensionOrder: isQuic
-                    ? ["sni", "supported_groups", "alpn", "signature_algorithms", "supported_versions", "key_share", "psk_modes", "quic_transport_parameters", "padding"]
-                    : ["sni", "extended_master_secret", "renegotiation_info", "supported_groups", "ec_point_formats", "session_ticket", "alpn", "status_request", "signature_algorithms", "supported_versions", "key_share", "psk_modes", "compress_certificate", "padding"],
-                supportedGroups: [0x001D, 0x0017, 0x0018, 0x0019],
-                signatureAlgorithms: [0x0807, 0x0403, 0x0804, 0x0401, 0x0503, 0x0805, 0x0501, 0x0806, 0x0601],
-                supportedVersions: isQuic ? [0x0304] : [0x0304, 0x0303],
-                keyShares: [0x001D, 0x0017],
-                compressCertificateAlgorithms: [0x0002],
-                includeApplicationSettings: false,
-                paddingTarget: 480,
-                maxUdpPayloadSize: 1452,
-                activeConnectionIdLimit: 4
-            };
-        }
-
-        if (browser.tlsStyle === "safari") {
-            return {
-                useGrease: false,
-                useSecondaryGrease: false,
-                cipherSuites: isQuic
-                    ? [0x1301, 0x1302, 0x1303]
-                    : [0x1301, 0x1302, 0x1303, 0xC02C, 0xC02B, 0xCCA9, 0xC02F, 0xC030, 0x009C, 0x009D],
-                extensionOrder: isQuic
-                    ? ["sni", "supported_groups", "alpn", "signature_algorithms", "supported_versions", "key_share", "psk_modes", "quic_transport_parameters"]
-                    : ["sni", "supported_groups", "ec_point_formats", "signature_algorithms", "alpn", "status_request", "supported_versions", "key_share", "psk_modes", "session_ticket"],
-                supportedGroups: [0x001D, 0x0017, 0x0018],
-                signatureAlgorithms: defaultSignatureAlgorithms,
-                supportedVersions: isQuic ? [0x0304] : [0x0304, 0x0303],
-                keyShares: [0x001D, 0x0017],
-                compressCertificateAlgorithms: [],
-                includeApplicationSettings: false,
-                paddingTarget: 0,
-                maxUdpPayloadSize: 1452,
-                activeConnectionIdLimit: 4
-            };
-        }
-
-        return chromiumFingerprint;
     }
 
     function buildUseSrtpExtension() {
@@ -1640,20 +1444,6 @@
         return { nibble: 14, extBytes: u16(value - 269) };
     }
 
-    function resolveQuicVersion(value) {
-        var normalized = String(value == null ? "" : value).trim().toLowerCase();
-
-        if (!normalized || normalized === "latest" || normalized === "default") {
-            normalized = LATEST_QUIC_VERSION === QUIC_VERSION_DEFS.v2.wireValue ? "v2" : "v1";
-        } else if (normalized === "1" || normalized === "0x00000001") {
-            normalized = "v1";
-        } else if (normalized === "2" || normalized === "0x6b3343cf") {
-            normalized = "v2";
-        }
-
-        return QUIC_VERSION_DEFS[normalized] || QUIC_VERSION_DEFS.v1;
-    }
-
     function getQuicInitialFirstByte(version, packetNumberLength) {
         return version.initialHeaderBase | ((packetNumberLength - 1) & 0x03);
     }
@@ -1675,6 +1465,17 @@
         }
 
         return path;
+    }
+
+    function randomPrivateIpv4() {
+        var pools = [
+            [10, randomIntExclusive(256), randomIntExclusive(256), 10 + randomIntExclusive(200)],
+            [172, 16 + randomIntExclusive(16), randomIntExclusive(256), 10 + randomIntExclusive(200)],
+            [192, 168, randomIntExclusive(256), 10 + randomIntExclusive(200)]
+        ];
+        var octets = randomItem(pools);
+
+        return octets.join(".");
     }
 
     function withRandomQuery(path, enabled) {
@@ -2242,8 +2043,6 @@
     return {
         generatePayload: generatePayload,
         generatePayloadAsync: generatePayloadAsync,
-        generateQuicAwgSignaturePartsAsync: generateQuicAwgSignaturePartsAsync,
-        generateQuicAwgSignatureAsync: generateQuicAwgSignatureAsync,
         helpers: {
             bytesToHex: bytesToHex,
             chunkPayload: chunkPayload,

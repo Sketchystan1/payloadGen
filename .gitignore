@@ -1,1 +1,2 @@
-tshark_results.txt
+*.pcapng
+*.txt

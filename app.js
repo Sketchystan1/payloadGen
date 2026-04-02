@@ -1,7 +1,119 @@
+(function (root) {
+    "use strict";
+
+    function buildChromeUserAgent(uaVersion) {
+        return "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/" +
+            String(uaVersion || "0.0.0.0") +
+            " Safari/537.36";
+    }
+
+    function isNonEmptyString(value) {
+        return typeof value === "string" && value.trim().length > 0;
+    }
+
+    function isValidChromeVersion(version) {
+        return /^\d+\.\d+\.\d+\.\d+$/.test(String(version || "").trim());
+    }
+
+    function getChromeMajorVersion(version) {
+        var majorVersion = parseInt(String(version || "").split(".")[0], 10);
+        return Number.isFinite(majorVersion) && majorVersion > 0 ? majorVersion : 0;
+    }
+
+    var CONFIG = {
+        maxBlocks: 5,
+        maxOutputLines: 5,
+        defaultMtu: 1280,
+        defaultHost: "gosuslugi.ru",
+        browserDataUrl: "https://versionhistory.googleapis.com/v1/chrome/platforms/win/channels/stable/versions/all/releases?page_size=1&order_by=version%20desc"
+    };
+    var CHROME_BROWSER_DATA = {
+        updatedAt: "2026-04-01T20:26:32.318Z",
+        defaultVersion: "147.0.7727.50",
+        uaVersion: "147.0.0.0",
+        userAgent: buildChromeUserAgent("147.0.0.0")
+    };
+
+    function updateChromeBrowserData(version, updatedAt) {
+        var normalizedVersion = String(version || "").trim();
+        var majorVersion = getChromeMajorVersion(normalizedVersion);
+
+        if (!isValidChromeVersion(normalizedVersion) || !majorVersion) {
+            return false;
+        }
+
+        CHROME_BROWSER_DATA.defaultVersion = normalizedVersion;
+        CHROME_BROWSER_DATA.uaVersion = majorVersion + ".0.0.0";
+        CHROME_BROWSER_DATA.userAgent = buildChromeUserAgent(CHROME_BROWSER_DATA.uaVersion);
+
+        if (isNonEmptyString(updatedAt)) {
+            CHROME_BROWSER_DATA.updatedAt = String(updatedAt).trim();
+        }
+
+        return true;
+    }
+
+    async function loadChromeVersionData(url, timeoutMs) {
+        var targetUrl = isNonEmptyString(url) ? String(url).trim() : CONFIG.browserDataUrl;
+        var timeout = typeof timeoutMs === "number" && timeoutMs > 0 ? timeoutMs : 1500;
+        var controller = null;
+        var timerId = null;
+        var response;
+        var payload;
+        var release;
+
+        if (!targetUrl || typeof fetch !== "function") {
+            return false;
+        }
+
+        if (typeof AbortController === "function") {
+            controller = new AbortController();
+            timerId = setTimeout(function () {
+                controller.abort();
+            }, timeout);
+        }
+
+        try {
+            response = await fetch(targetUrl, {
+                cache: "no-store",
+                signal: controller ? controller.signal : undefined
+            });
+
+            if (!response || !response.ok) {
+                return false;
+            }
+
+            payload = await response.json();
+            release = payload && payload.releases && payload.releases[0];
+            return !!(release && updateChromeBrowserData(release.version, release.serving && release.serving.startTime));
+        } catch (error) {
+            return false;
+        } finally {
+            if (timerId) {
+                clearTimeout(timerId);
+            }
+        }
+    }
+
+    root.PayloadGenData = {
+        CONFIG: CONFIG,
+        DONATE_URL: "https://boosty.to/sketchystan1",
+        LATEST_QUIC_VERSION: 0x00000001,
+        SSDP_SEARCH_TARGETS: [
+            "ssdp:all",
+            "upnp:rootdevice",
+            "urn:schemas-upnp-org:device:InternetGatewayDevice:1",
+            "urn:schemas-upnp-org:service:WANIPConnection:1",
+            "urn:schemas-upnp-org:device:MediaServer:1"
+        ],
+        CURL_USER_AGENTS: ["curl/8.5.0", "curl/8.7.1", "curl/8.10.1", "curl/8.13.0"],
+        CHROME_BROWSER_DATA: CHROME_BROWSER_DATA,
+        loadChromeVersionData: loadChromeVersionData
+    };
+}(typeof globalThis !== "undefined" ? globalThis : this));
+
 (function (root, factory) {
-    var data = root.PayloadGenData || (typeof require === "function" ? require("./data.js") : null);
-    var generators = root.PayloadGenGenerators || (typeof require === "function" ? require("./generators.js") : null);
-    var api = factory(root, data, generators);
+    var api = factory(root, root.PayloadGenData || null);
 
     if (typeof module !== "undefined" && module.exports) {
         module.exports = api;
@@ -13,34 +125,142 @@
             api.init();
         });
     }
-}(typeof globalThis !== "undefined" ? globalThis : this, function (root, Data, Generators) {
+}(typeof globalThis !== "undefined" ? globalThis : this, function (root, SharedData) {
     "use strict";
 
-    if (!Data) {
+    if (!SharedData) {
         throw new Error("PayloadGenData is required before app.js.");
     }
 
-    if (!Generators) {
-        throw new Error("PayloadGenGenerators is required before app.js.");
-    }
-
-    var CONFIG = Data.CONFIG;
-    var STORAGE_KEYS = Data.STORAGE_KEYS;
-    var CATEGORY_DEFS = Data.CATEGORY_DEFS;
-    var FIELD_DEFS = Data.FIELD_DEFS;
-    var OPTION_SETS = Data.OPTION_SETS;
-    var PROTOCOL_CATALOG = Data.PROTOCOL_CATALOG;
-    var PROTOCOL_WIKI_URLS = Data.PROTOCOL_WIKI_URLS;
-    var DOMAIN_SNAPSHOTS = Data.DOMAIN_SNAPSHOTS;
-    var LOCALES = Data.LOCALES;
-    var POPULAR_PROTOCOL_IDS = Data.POPULAR_PROTOCOL_IDS;
-    var DONATE_URL = Data.DONATE_URL;
+    var CONFIG = SharedData.CONFIG;
+    var UI = {
+        title: "PayloadGen",
+        description: "Categorized protocol payload generator.",
+        introHtml: "Generate <code>i1..i5</code> payload.",
+        blocksTitle: "Payload Blocks",
+        outputLabel: "Generated Output",
+        outputPlaceholder: "Press Generate to build i1..i5 lines.",
+        addButton: "Add Payload",
+        generateButton: "Generate",
+        copyButton: "Copy Output",
+        resetButton: "Reset",
+        removeButton: "Remove",
+        donateButton: "Donate",
+        mtuLabel: "MTU",
+        padMtuLabel: "Pad to MTU",
+        protocolLabel: "Protocol",
+        wikiLinkLabel: "Wiki",
+        payloadTitle: "Payload"
+    };
+    var CATEGORY_DEFS = [
+        { id: "discovery", rank: 1, label: "Discovery & Name Resolution" },
+        { id: "web", rank: 2, label: "Web & Secure Web" },
+        { id: "realtime", rank: 3, label: "Realtime & Media" },
+        { id: "iot", rank: 4, label: "IoT & Device" },
+        { id: "infra", rank: 5, label: "Infrastructure & Operations" },
+        { id: "messaging", rank: 6, label: "Messaging & Databases" },
+        { id: "p2p", rank: 7, label: "P2P & Distribution" }
+    ];
+    var OPTION_SETS = {
+        httpMethods: [{ value: "GET", label: "GET" }, { value: "HEAD", label: "HEAD" }, { value: "POST", label: "POST" }],
+        sipActions: [{ value: "OPTIONS", label: "OPTIONS" }, { value: "REGISTER", label: "REGISTER" }],
+        coapMethods: [{ value: "GET", label: "GET" }, { value: "POST", label: "POST" }],
+        tlsAlpn: [{ value: "http/1.1", label: "http/1.1" }, { value: "h2", label: "h2" }],
+        syslogFacilities: [{ value: "user", label: "user" }, { value: "daemon", label: "daemon" }, { value: "local0", label: "local0" }],
+        syslogSeverities: [{ value: "info", label: "info" }, { value: "notice", label: "notice" }, { value: "warning", label: "warning" }]
+    };
+    var FIELD_DEFS = {
+        host: { type: "text", label: "Domain", placeholder: "example.com", spellcheck: false },
+        path: { type: "text", label: "Path", placeholder: "/", defaultValue: "/", spellcheck: false },
+        httpMethod: { type: "select", label: "Method", optionSet: "httpMethods", defaultValue: "GET" },
+        sipAction: { type: "select", label: "Action", optionSet: "sipActions", defaultValue: "OPTIONS" },
+        coapMethod: { type: "select", label: "Method", optionSet: "coapMethods", defaultValue: "GET" },
+        randomQuery: { type: "checkbox", label: "Random Query", defaultValue: true },
+        filename: { type: "text", label: "Filename", defaultValue: "test.bin", spellcheck: false },
+        username: { type: "text", label: "Username", spellcheck: false },
+        database: { type: "text", label: "Database", spellcheck: false },
+        community: { type: "text", label: "Community", defaultValue: "public", spellcheck: false },
+        oid: { type: "text", label: "OID", defaultValue: "1.3.6.1.2.1.1.1.0", spellcheck: false },
+        message: { type: "textarea", label: "Message", defaultValue: "payloadgen test", className: "field field-wide", rows: 3, spellcheck: false },
+        clientId: { type: "text", label: "Client ID", spellcheck: false },
+        tlsAlpn: { type: "select", label: "ALPN", optionSet: "tlsAlpn", defaultValue: "h2" },
+        browserVersion: { type: "text", label: "Version", spellcheck: false },
+        syslogFacility: { type: "select", label: "Facility", optionSet: "syslogFacilities", defaultValue: "user" },
+        syslogSeverity: { type: "select", label: "Severity", optionSet: "syslogSeverities", defaultValue: "info" }
+    };
+    var PROTOCOL_CATALOG = [
+        { id: "dns", categoryId: "discovery", transport: "udp", port: 53, rank: 1, label: "DNS", descriptor: "Standard A-record query", fieldSet: ["host"] },
+        { id: "mdns", categoryId: "discovery", transport: "udp", port: 5353, rank: 2, label: "mDNS", descriptor: "Multicast DNS query with randomized query class and DNS case", fieldSet: ["host"] },
+        { id: "ssdp", categoryId: "discovery", transport: "udp", port: 1900, rank: 3, label: "SSDP", descriptor: "Generated discovery probe", fieldSet: [] },
+        { id: "llmnr", categoryId: "discovery", transport: "udp", port: 5355, rank: 4, label: "LLMNR", descriptor: "LLMNR hostname query", fieldSet: ["host"] },
+        { id: "nbns", categoryId: "discovery", transport: "udp", port: 137, rank: 5, label: "NBNS", descriptor: "NetBIOS name query", fieldSet: ["host"] },
+        { id: "quic", categoryId: "web", transport: "udp", port: 443, rank: 1, label: "QUIC", descriptor: "Initial-like QUIC payload", fieldSet: ["host"] },
+        { id: "tls_client_hello", categoryId: "web", transport: "tcp", port: 443, rank: 2, label: "TLS ClientHello", descriptor: "TLS ClientHello packet", fieldSet: ["host", "browserVersion", "tlsAlpn"], defaults: { tlsAlpn: "h2" } },
+        { id: "http2", categoryId: "web", transport: "tcp", port: 80, rank: 3, label: "HTTP/2", descriptor: "Browser-style HTTP/2 preface, SETTINGS, and opening stream", fieldSet: ["host", "path", "browserVersion"], defaults: { path: "/" } },
+        { id: "http_browser", categoryId: "web", transport: "tcp", port: 80, rank: 4, label: "HTTP Browser", descriptor: "Browser-style HTTP/1.1 request", fieldSet: ["host", "browserVersion", "path", "randomQuery"], defaults: { path: "/", randomQuery: true } },
+        { id: "websocket", categoryId: "web", transport: "tcp", port: 80, rank: 5, label: "WebSocket", descriptor: "WebSocket upgrade request", fieldSet: ["host", "browserVersion", "path"], defaults: { path: "/" } },
+        { id: "curl", categoryId: "web", transport: "tcp", port: 80, rank: 6, label: "cURL (HTTP/1.1)", descriptor: "Dynamic HTTP/1.1 request with curl User-Agent", fieldSet: ["host", "path", "httpMethod", "randomQuery"], defaults: { path: "/", httpMethod: "GET", randomQuery: true } },
+        { id: "stun", categoryId: "realtime", transport: "udp", port: 3478, rank: 1, label: "STUN", descriptor: "Binding Request with SOFTWARE attribute", fieldSet: ["host"] },
+        { id: "dtls", categoryId: "realtime", transport: "udp", port: 443, rank: 2, label: "DTLS (WebRTC)", descriptor: "ClientHello-like DTLS datagram", fieldSet: ["host"] },
+        { id: "sip", categoryId: "realtime", transport: "udp", port: 5060, rank: 3, label: "SIP", descriptor: "SIP request with randomized headers", fieldSet: ["host", "sipAction"], defaults: { sipAction: "OPTIONS" } },
+        { id: "rtp", categoryId: "realtime", transport: "udp", port: 5004, rank: 4, label: "RTP", descriptor: "12-byte RTP header", fieldSet: [] },
+        { id: "rtcp", categoryId: "realtime", transport: "udp", port: 5005, rank: 5, label: "RTCP", descriptor: "Receiver Report-like RTCP packet", fieldSet: [] },
+        { id: "coap", categoryId: "iot", transport: "udp", port: 5683, rank: 1, label: "CoAP", descriptor: "CoAP request with Uri-Host and Uri-Path", fieldSet: ["host", "path", "coapMethod"], defaults: { path: "/", coapMethod: "GET" } },
+        { id: "mqtt", categoryId: "iot", transport: "tcp", port: 1883, rank: 2, label: "MQTT", descriptor: "MQTT CONNECT packet", fieldSet: ["clientId"] },
+        { id: "ntp", categoryId: "infra", transport: "udp", port: 123, rank: 1, label: "NTP", descriptor: "NTP v4 client request", fieldSet: [] },
+        { id: "dhcp_discover", categoryId: "infra", transport: "udp", port: 67, rank: 2, label: "DHCP DISCOVER", descriptor: "DHCP DISCOVER packet", fieldSet: [] },
+        { id: "snmp", categoryId: "infra", transport: "udp", port: 161, rank: 3, label: "SNMP", descriptor: "SNMP GET request", fieldSet: ["community", "oid"], defaults: { community: "public", oid: "1.3.6.1.2.1.1.1.0" } },
+        { id: "syslog", categoryId: "infra", transport: "udp", port: 514, rank: 4, label: "Syslog", descriptor: "UDP syslog message", fieldSet: ["message", "syslogFacility", "syslogSeverity"], defaults: { message: "payloadgen test", syslogFacility: "user", syslogSeverity: "info" } },
+        { id: "tftp", categoryId: "infra", transport: "udp", port: 69, rank: 5, label: "TFTP", descriptor: "TFTP RRQ request with negotiated option extensions", fieldSet: ["filename"], defaults: { filename: "test.bin" } },
+        { id: "radius", categoryId: "infra", transport: "udp", port: 1812, rank: 6, label: "RADIUS", descriptor: "RADIUS Access-Request", fieldSet: ["username"], defaults: { username: "user" } },
+        { id: "redis", categoryId: "messaging", transport: "tcp", port: 6379, rank: 1, label: "Redis RESP", descriptor: "RESP PING request", fieldSet: [] },
+        { id: "postgresql", categoryId: "messaging", transport: "tcp", port: 5432, rank: 2, label: "PostgreSQL", descriptor: "PostgreSQL startup packet", fieldSet: ["username", "database"], defaults: { username: "postgres", database: "postgres" } },
+        { id: "mysql", categoryId: "messaging", transport: "tcp", port: 3306, rank: 3, label: "MySQL", descriptor: "MySQL client command packet", fieldSet: ["username"], defaults: { username: "root" } },
+        { id: "utp", categoryId: "p2p", transport: "udp", port: 6881, rank: 1, label: "uTP (BitTorrent)", descriptor: "20-byte SYN frame", fieldSet: [] },
+        { id: "bittorrent_dht", categoryId: "p2p", transport: "udp", port: 6881, rank: 2, label: "BitTorrent DHT", descriptor: "BitTorrent DHT ping query", fieldSet: [] }
+    ];
+    var PROTOCOL_WIKI_URLS = {
+        dns: "https://en.wikipedia.org/wiki/Domain_Name_System",
+        mdns: "https://en.wikipedia.org/wiki/Multicast_DNS",
+        ssdp: "https://en.wikipedia.org/wiki/Simple_Service_Discovery_Protocol",
+        llmnr: "https://en.wikipedia.org/wiki/Link-Local_Multicast_Name_Resolution",
+        nbns: "https://en.wikipedia.org/wiki/NetBIOS_over_TCP/IP",
+        quic: "https://en.wikipedia.org/wiki/QUIC",
+        tls_client_hello: "https://en.wikipedia.org/wiki/Transport_Layer_Security",
+        http2: "https://en.wikipedia.org/wiki/HTTP/2",
+        http_browser: "https://en.wikipedia.org/wiki/HTTP",
+        websocket: "https://en.wikipedia.org/wiki/WebSocket",
+        curl: "https://en.wikipedia.org/wiki/CURL",
+        stun: "https://en.wikipedia.org/wiki/STUN",
+        dtls: "https://en.wikipedia.org/wiki/Datagram_Transport_Layer_Security",
+        sip: "https://en.wikipedia.org/wiki/Session_Initiation_Protocol",
+        rtp: "https://en.wikipedia.org/wiki/Real-time_Transport_Protocol",
+        rtcp: "https://en.wikipedia.org/wiki/RTP_Control_Protocol",
+        coap: "https://en.wikipedia.org/wiki/Constrained_Application_Protocol",
+        mqtt: "https://en.wikipedia.org/wiki/MQTT",
+        ntp: "https://en.wikipedia.org/wiki/Network_Time_Protocol",
+        dhcp_discover: "https://en.wikipedia.org/wiki/Dynamic_Host_Configuration_Protocol",
+        snmp: "https://en.wikipedia.org/wiki/Simple_Network_Management_Protocol",
+        syslog: "https://en.wikipedia.org/wiki/Syslog",
+        tftp: "https://en.wikipedia.org/wiki/Trivial_File_Transfer_Protocol",
+        radius: "https://en.wikipedia.org/wiki/RADIUS",
+        redis: "https://en.wikipedia.org/wiki/Redis",
+        postgresql: "https://en.wikipedia.org/wiki/PostgreSQL",
+        mysql: "https://en.wikipedia.org/wiki/MySQL",
+        utp: "https://en.wikipedia.org/wiki/Micro_Transport_Protocol",
+        bittorrent_dht: "https://en.wikipedia.org/wiki/Mainline_DHT"
+    };
+    var DOMAIN_POOL = [
+        "google.com", "youtube.com", "wikipedia.org", "amazon.com", "facebook.com", "reddit.com", "github.com",
+        "microsoft.com", "apple.com", "cloudflare.com", "openai.com", "instagram.com", "linkedin.com", "bing.com",
+        "netflix.com", "adobe.com", "paypal.com", "stackoverflow.com", "mozilla.org", "bbc.com", "cnn.com",
+        "nytimes.com", "office.com", "whatsapp.com", "discord.com", "dropbox.com", "twitch.tv", "zoom.us",
+        "spotify.com", "imdb.com"
+    ];
     var IDS = {
         pageTitle: "page-title",
         pageIntro: "page-intro",
-        localeToggleButton: "locale-toggle-btn",
         donateButton: "donate-btn",
-        donateButtonLabel: "donate-btn-label",
         blocksPanel: "blocks-panel",
         mtuLabel: "mtu-label",
         padMtuLabel: "pad-mtu-label",
@@ -49,7 +269,6 @@
         blocks: "payload-blocks",
         mtuInput: "mtu-input",
         output: "output-text",
-        status: "status-banner",
         addButton: "add-payload-btn",
         generateButton: "generate-btn",
         copyButton: "copy-btn",
@@ -65,42 +284,65 @@
         payloadDynamicFields: ".payload-dynamic-fields",
         payloadError: ".payload-error"
     };
-    var STATUS_CLASS_BY_TONE = {
-        error: "status-error",
-        info: "status-info"
-    };
-    var CATEGORY_MAP = Generators.helpers.createMapById(CATEGORY_DEFS);
-    var PROTOCOL_MAP = Generators.helpers.createMapById(PROTOCOL_CATALOG);
-    var bytesToHex = Generators.helpers.bytesToHex;
-    var chunkPayload = Generators.helpers.chunkPayload;
-    var clearElement = Generators.helpers.clearElement;
-    var createElement = Generators.helpers.createElement;
-    var getRequiredElement = Generators.helpers.getRequiredElement;
-    var setElementHtml = Generators.helpers.setElementHtml;
-    var setElementText = Generators.helpers.setElementText;
-    var generatePayload = Generators.generatePayload;
-    var dom = {
-        initialized: false
-    };
-    var state = {
-        locale: getInitialLocale(),
-        status: {
-            key: "ready",
-            tone: "info",
-            data: {}
-        }
-    };
+    var CATEGORY_MAP = createMapById(CATEGORY_DEFS);
+    var PROTOCOL_MAP = createMapById(PROTOCOL_CATALOG);
+    var Generators = null;
+    var dom = { initialized: false };
 
     function init() {
         if (dom.initialized || typeof document === "undefined") {
-            return;
+            return false;
         }
 
+        ensureGenerators();
+        dom.initialized = true;
         cacheDom();
         bindEvents();
-        resetAll(false);
-        applyLocalization();
-        dom.initialized = true;
+        resetAll();
+        applyCopy();
+        maybeLoadChromeVersionInBackground();
+        return true;
+    }
+
+    function ensureGenerators() {
+        if (!Generators) {
+            Generators = root.PayloadGenGenerators || (typeof require === "function" ? require("./generators.js") : null);
+        }
+
+        if (!Generators) {
+            throw new Error("PayloadGenGenerators is required before initialization.");
+        }
+
+        return Generators;
+    }
+
+    function maybeLoadChromeVersionInBackground() {
+        SharedData.loadChromeVersionData(CONFIG.browserDataUrl, 1500).then(function (updated) {
+            if (updated) {
+                refreshBrowserVersionDefaults();
+            }
+        }).catch(function () {
+        });
+    }
+
+    function refreshBrowserVersionDefaults() {
+        getBlocks().forEach(function (block) {
+            var protocol = getProtocolMeta(block._state.protocolId);
+            var refs;
+            var input;
+
+            if (!protocolUsesField(protocol, "browserVersion") ||
+                Object.prototype.hasOwnProperty.call(block._state.values, "browserVersion")) {
+                return;
+            }
+
+            refs = getBlockRefs(block);
+            input = refs.dynamicFields.querySelector(".payload-field-browserVersion");
+
+            if (input) {
+                input.value = getChromeDefaultVersion();
+            }
+        });
     }
 
     function cacheDom() {
@@ -112,141 +354,62 @@
     }
 
     function bindEvents() {
-        dom.localeToggleButton.addEventListener("click", function () {
-            setLocale(state.locale === "en" ? "ru" : "en");
-        });
         dom.addButton.addEventListener("click", handleAddBlock);
-        dom.generateButton.addEventListener("click", function () {
-            generateOutput();
-        });
-        dom.copyButton.addEventListener("click", function () {
-            copyOutput();
-        });
-        dom.resetButton.addEventListener("click", function () {
-            resetAll(true);
-        });
+        dom.generateButton.addEventListener("click", function () { generateOutput(); });
+        dom.copyButton.addEventListener("click", function () { copyOutput(); });
+        dom.resetButton.addEventListener("click", function () { resetAll(); });
     }
 
-    function setLocale(locale) {
-        if (locale !== "en" && locale !== "ru") {
-            return;
-        }
-
-        if (state.locale === locale) {
-            renderLocaleButton();
-            return;
-        }
-
-        state.locale = locale;
-        setStoredValue(STORAGE_KEYS.locale, locale);
-        applyLocalization();
-    }
-
-    function applyLocalization() {
-        document.documentElement.lang = state.locale;
-        document.title = t("documentTitle");
+    function applyCopy() {
+        document.documentElement.lang = "en";
+        document.title = UI.title;
 
         if (dom.metaDescription) {
-            dom.metaDescription.setAttribute("content", t("pageDescription"));
+            dom.metaDescription.setAttribute("content", UI.description);
         }
 
-        setElementText(dom.pageTitle, t("pageTitle"));
-        setElementHtml(dom.pageIntro, t("pageIntroHtml"));
-        setElementText(dom.mtuLabel, t("mtuLabel"));
-        if (dom.padMtuLabel) { setElementText(dom.padMtuLabel, t("padMtuLabel")); }
-        setElementText(dom.addButton, t("addButton"));
-        setElementText(dom.generateButton, t("generateButton"));
-        setElementText(dom.copyButton, t("copyButton"));
-        setElementText(dom.resetButton, t("resetButton"));
-        dom.blocksPanel.setAttribute("aria-label", t("blocksTitle"));
-        setElementText(dom.outputLabel, t("outputLabel"));
-        dom.output.placeholder = t("outputPlaceholder");
-        dom.donateButtonLabel.textContent = t("donateButton");
-        dom.donateButton.href = DONATE_URL;
-        renderLocaleButton();
-
-        localizeBlocks();
-        renderStatus();
+        setElementText(dom.pageTitle, UI.title);
+        setElementHtml(dom.pageIntro, UI.introHtml);
+        setElementText(dom.mtuLabel, UI.mtuLabel);
+        setElementText(dom.padMtuLabel, UI.padMtuLabel);
+        setElementText(dom.addButton, UI.addButton);
+        setElementText(dom.generateButton, UI.generateButton);
+        setElementText(dom.copyButton, UI.copyButton);
+        setElementText(dom.resetButton, UI.resetButton);
+        setElementText(dom.outputLabel, UI.outputLabel);
+        dom.output.placeholder = UI.outputPlaceholder;
+        dom.blocksPanel.setAttribute("aria-label", UI.blocksTitle);
+        dom.donateButton.href = SharedData.DONATE_URL;
+        dom.donateButton.setAttribute("aria-label", UI.donateButton);
+        dom.donateButton.setAttribute("title", UI.donateButton);
+        getBlocks().forEach(syncBlockUi);
+        updateBlockUi();
     }
 
-    function renderLocaleButton() {
-        dom.localeToggleButton.textContent = state.locale === "en" ? "EN / RU" : "RU / EN";
-        dom.localeToggleButton.setAttribute("aria-label", t("localeToggleLabel"));
-        dom.localeToggleButton.setAttribute("title", t("localeToggleLabel"));
-    }
-
-    function resetAll(announceStatus) {
+    function resetAll() {
         clearElement(dom.blocks);
         dom.output.value = "";
         dom.mtuInput.value = String(CONFIG.defaultMtu);
         dom.padMtuCheckbox.checked = false;
         addBlock(createDefaultBlockState("quic"));
         clearAllErrors();
-
-        if (announceStatus) {
-            setStatus("reset", "info");
-        }
     }
 
     function handleAddBlock() {
-        if (getBlockCount() >= CONFIG.maxBlocks) {
-            return;
+        if (getBlockCount() < CONFIG.maxBlocks) {
+            addBlock(createDefaultBlockState("quic"));
         }
-
-        addBlock(createDefaultBlockState("quic"));
-        setStatus("addedBlock", "info");
-    }
-
-    function applyRandomRankedDomainToBlock(block) {
-        var protocol = getProtocolMeta(block._state.protocolId);
-        var pool = getRankedDomainPool();
-        var domain;
-
-        if (!protocolUsesField(protocol, "host")) {
-            setStatus("randomDomainNoTargets", "error");
-            return;
-        }
-
-        domain = pickWeightedRankedDomain(pool);
-        setFieldValue(block, "host", domain);
-        syncBlockUi(block);
-        clearBlockError(block);
-
-        setStatus("randomDomainApplied", "info", {
-            count: 1,
-            domain: domain,
-            ranking: t("rankingRu")
-        });
     }
 
     function createDefaultBlockState(protocolId) {
-        return {
-            protocolId: protocolId || "quic",
-            values: createDefaultBlockValues()
-        };
+        return { protocolId: protocolId || "quic", values: {} };
     }
 
     function hydrateBlockState(rawState) {
-        var blockState = rawState || {};
-        var protocolId = isKnownProtocol(blockState.protocolId) ? blockState.protocolId : "quic";
-        var values = blockState.values && typeof blockState.values === "object" ? blockState.values : {};
-
         return {
-            protocolId: protocolId,
-            values: mergeDefaultBlockValues(values)
+            protocolId: isKnownProtocol(rawState && rawState.protocolId) ? rawState.protocolId : "quic",
+            values: rawState && rawState.values && typeof rawState.values === "object" ? rawState.values : {}
         };
-    }
-
-    function createDefaultBlockValues() {
-        return {};
-    }
-
-    function mergeDefaultBlockValues(values) {
-        var merged = createDefaultBlockValues();
-        Object.keys(values).forEach(function (key) {
-            merged[key] = values[key];
-        });
-        return merged;
     }
 
     function addBlock(initialState) {
@@ -260,30 +423,19 @@
         var meta = createElement("p", { className: "payload-meta" });
         var protocolSelect = createElement("select", { className: "payload-protocol" });
         var protocolSummary = createElement("p", { className: "protocol-summary" });
-        var protocolLink = createElement("a", {
-            className: "protocol-link",
-            href: "#",
-            target: "_blank",
-            rel: "noreferrer noopener"
-        });
+        var protocolLink = createElement("a", { className: "protocol-link", href: "#", target: "_blank", rel: "noreferrer noopener" });
         var dynamicFields = createElement("div", { className: "field-grid payload-dynamic-fields" });
         var error = createElement("p", { className: "payload-error" });
 
         block._state = hydrateBlockState(initialState);
         error.setAttribute("aria-live", "polite");
-
         block.appendChild(createBlockHeader(block, title));
         block.appendChild(meta);
         block.appendChild(createElement("div", {
             className: "field-grid payload-static-fields",
-            children: [
-                createField("protocolLabel", protocolSelect, "field")
-            ]
+            children: [createField(UI.protocolLabel, protocolSelect, "field")]
         }));
-        block.appendChild(createElement("div", {
-            className: "protocol-info",
-            children: [protocolSummary, protocolLink]
-        }));
+        block.appendChild(createElement("div", { className: "protocol-info", children: [protocolSummary, protocolLink] }));
         block.appendChild(dynamicFields);
         block.appendChild(error);
 
@@ -298,11 +450,7 @@
     }
 
     function createBlockHeader(block, title) {
-        var titleWrap = createElement("div", {
-            className: "payload-title-wrap",
-            children: [title]
-        });
-        var removeButton = createTranslatableButton("removeButton", "btn btn-ghost remove-payload-btn");
+        var removeButton = createButton(UI.removeButton, "btn btn-ghost remove-payload-btn");
 
         removeButton.addEventListener("click", function () {
             block.remove();
@@ -312,201 +460,113 @@
             }
 
             updateBlockUi();
-            setStatus("removedBlock", "info");
         });
 
         return createElement("div", {
             className: "payload-block-header",
-            children: [titleWrap, removeButton]
-        });
-    }
-
-    function createField(labelKey, control, className) {
-        return createElement("label", {
-            className: className,
             children: [
-                createElement("span", {
-                    className: "field-label",
-                    textContent: t(labelKey)
-                }),
-                control
+                createElement("div", { className: "payload-title-wrap", children: [title] }),
+                removeButton
             ]
         });
-    }
-
-    function createCheckboxField(labelKey, control, className, noteKey) {
-        var children = [
-            createElement("span", {
-                className: "checkbox-row",
-                children: [
-                    control,
-                    createElement("span", {
-                        className: "checkbox-label",
-                        textContent: t(labelKey)
-                    })
-                ]
-            })
-        ];
-
-        if (noteKey) {
-            children.push(createElement("span", {
-                className: "field-note",
-                innerHTML: t(noteKey)
-            }));
-        }
-
-        return createElement("label", {
-            className: className,
-            children: children
-        });
-    }
-
-    function createTranslatableButton(labelKey, className) {
-        return createElement("button", {
-            type: "button",
-            className: className,
-            textContent: t(labelKey)
-        });
-    }
-
-    function localizeBlocks() {
-        getBlocks().forEach(function (block) {
-            syncBlockUi(block);
-        });
-
-        updateBlockUi();
     }
 
     function syncBlockUi(block) {
         var refs = getBlockRefs(block);
         var availableProtocols = listProtocols();
+        var protocol;
 
         if (!protocolListHasId(availableProtocols, block._state.protocolId)) {
             block._state.protocolId = availableProtocols[0].id;
         }
 
+        protocol = getProtocolMeta(block._state.protocolId);
         fillProtocolSelect(refs.protocolSelect, availableProtocols, block._state.protocolId);
-        renderDynamicFields(block);
-        renderProtocolInfo(block);
-        refs.removeButton.textContent = t("removeButton");
+        clearElement(refs.dynamicFields);
+        protocol.fieldSet.forEach(function (fieldId) {
+            refs.dynamicFields.appendChild(createDynamicField(block, protocol, fieldId));
+        });
+        refs.protocolSelect.title = formatProtocolSummary(protocol);
+        refs.protocolSummary.textContent = formatProtocolSummary(protocol);
+        refs.protocolLink.textContent = UI.wikiLinkLabel;
+        refs.protocolLink.href = PROTOCOL_WIKI_URLS[protocol.id] || "#";
+        refs.protocolLink.title = formatProtocolSummary(protocol);
+        refs.removeButton.textContent = UI.removeButton;
         refs.meta.textContent = "";
         refs.meta.hidden = true;
         updateBlockUi();
-    }
-
-    function renderProtocolInfo(block) {
-        var refs = getBlockRefs(block);
-        var protocol = getProtocolMeta(block._state.protocolId);
-        var summary = formatProtocolSummary(protocol);
-
-        refs.protocolSelect.title = summary;
-        refs.protocolSummary.textContent = summary;
-        refs.protocolLink.textContent = t("wikiLinkLabel");
-        refs.protocolLink.href = getProtocolWikiUrl(protocol.id);
-        refs.protocolLink.title = summary;
-    }
-
-    function renderDynamicFields(block) {
-        var protocol = getProtocolMeta(block._state.protocolId);
-        var refs = getBlockRefs(block);
-
-        clearElement(refs.dynamicFields);
-
-        getRenderableProtocolFieldIds(protocol).forEach(function (fieldId) {
-            refs.dynamicFields.appendChild(createDynamicField(block, protocol, fieldId));
-        });
-    }
-
-    function getProtocolOptionFieldIds(protocol) {
-        var fieldIds = protocol.fieldSet.slice();
-
-        if (protocol.id !== "quic") {
-            fieldIds.push("awgSplitMode");
-        }
-
-        return fieldIds;
-    }
-
-    function getRenderableProtocolFieldIds(protocol) {
-        return getProtocolOptionFieldIds(protocol).filter(function (fieldId) {
-            return !(protocol.id === "quic" && fieldId === "quicEncrypt");
-        });
     }
 
     function createDynamicField(block, protocol, fieldId) {
         var fieldDef = FIELD_DEFS[fieldId];
         var value = getDisplayFieldValue(block, protocol, fieldId);
         var className = fieldDef.className || "field";
+        var control;
 
         if (fieldId === "host") {
             return createHostField(block, value);
         }
 
         if (fieldDef.type === "checkbox") {
-            var checkbox = createElement("input", {
-                type: "checkbox",
-                className: "payload-field payload-field-" + fieldId
-            });
-            checkbox.checked = !!value;
-            checkbox.addEventListener("change", function () {
-                setFieldValue(block, fieldId, checkbox.checked);
+            control = createElement("input", { type: "checkbox", className: "payload-field payload-field-" + fieldId });
+            control.checked = !!value;
+            control.addEventListener("change", function () {
+                setFieldValue(block, fieldId, control.checked);
                 syncBlockUi(block);
                 clearBlockError(block);
             });
-            return createCheckboxField(fieldDef.labelKey, checkbox, "field checkbox-field", fieldDef.noteKey);
+            return createCheckboxField(fieldDef.label, control, "field checkbox-field");
         }
 
         if (fieldDef.type === "select") {
-            var select = createElement("select", {
-                className: "payload-field payload-field-" + fieldId
-            });
-            fillSelectOptions(select, getFieldOptions(fieldDef.optionSet), String(value));
-            select.addEventListener("change", function () {
-                setFieldValue(block, fieldId, select.value);
+            control = createElement("select", { className: "payload-field payload-field-" + fieldId });
+            fillSelectOptions(control, getFieldOptions(fieldDef.optionSet), String(value));
+            control.addEventListener("change", function () {
+                setFieldValue(block, fieldId, control.value);
                 syncBlockUi(block);
                 clearBlockError(block);
             });
-            return createField(fieldDef.labelKey, select, className);
+            return createField(fieldDef.label, control, className);
         }
 
         if (fieldDef.type === "textarea") {
-            var textarea = createElement("textarea", {
+            control = createElement("textarea", {
                 className: "payload-field payload-field-" + fieldId,
                 rows: fieldDef.rows || 3,
                 placeholder: fieldDef.placeholder || ""
             });
-            textarea.spellcheck = !!fieldDef.spellcheck;
-            textarea.value = String(value);
-            textarea.addEventListener("input", function () {
-                setFieldValue(block, fieldId, textarea.value);
+            control.spellcheck = !!fieldDef.spellcheck;
+            control.value = String(value);
+            control.addEventListener("input", function () {
+                setFieldValue(block, fieldId, control.value);
                 clearBlockError(block);
             });
-            return createField(fieldDef.labelKey, textarea, className);
+            return createField(fieldDef.label, control, className);
         }
 
-        var input = createElement("input", {
+        control = createElement("input", {
             type: "text",
             className: "payload-field payload-field-" + fieldId,
             placeholder: fieldDef.placeholder || "",
             autocomplete: "off"
         });
-        input.spellcheck = !!fieldDef.spellcheck;
-        input.value = String(value);
-        input.addEventListener("input", function () {
-            setFieldValue(block, fieldId, input.value);
+        control.spellcheck = !!fieldDef.spellcheck;
+        control.value = String(value);
+        control.addEventListener("input", function () {
+            setFieldValue(block, fieldId, control.value);
             clearBlockError(block);
         });
-        return createField(fieldDef.labelKey, input, className);
+        return createField(fieldDef.label, control, className);
     }
 
     function createHostField(block, value) {
         var input = createElement("input", {
             type: "text",
             className: "payload-field payload-field-host",
-            placeholder: FIELD_DEFS.host.placeholder || "",
+            placeholder: FIELD_DEFS.host.placeholder,
             autocomplete: "off"
         });
-        var randomButton = createTranslatableButton("randomHostButton", "btn btn-ghost");
+        var randomButton = createButton("Random", "btn btn-ghost");
 
         input.spellcheck = !!FIELD_DEFS.host.spellcheck;
         input.value = String(value);
@@ -514,20 +574,15 @@
             setFieldValue(block, "host", input.value);
             clearBlockError(block);
         });
-
         randomButton.addEventListener("click", function () {
-            applyRandomRankedDomainToBlock(block);
+            setFieldValue(block, "host", pickWeightedRankedDomain(DOMAIN_POOL));
+            syncBlockUi(block);
+            clearBlockError(block);
         });
 
-        return createField("hostLabel", createElement("div", {
+        return createField("Domain", createElement("div", {
             className: "host-field-row",
-            children: [
-                input,
-                createElement("div", {
-                    className: "host-field-actions",
-                    children: [randomButton]
-                })
-            ]
+            children: [input, createElement("div", { className: "host-field-actions", children: [randomButton] })]
         }), "field");
     }
 
@@ -541,7 +596,7 @@
         }
 
         if (fieldId === "browserVersion") {
-            return getBrowserDefaultVersion(getResolvedBrowserProfile(block, protocol));
+            return getChromeDefaultVersion();
         }
 
         return getFieldDefault(protocol, fieldId);
@@ -560,58 +615,42 @@
     }
 
     function getFieldOptions(optionSetId) {
-        return (OPTION_SETS[optionSetId] || []).map(function (option) {
-            return {
-                value: option.value,
-                label: t(option.labelKey)
-            };
-        });
+        return OPTION_SETS[optionSetId] || [];
     }
 
     function fillSelectOptions(select, options, selectedValue) {
         clearElement(select);
-
         options.forEach(function (option) {
-            select.appendChild(createElement("option", {
-                value: String(option.value),
-                textContent: option.label
-            }));
+            select.appendChild(createElement("option", { value: String(option.value), textContent: option.label }));
         });
-
         select.value = String(selectedValue);
     }
 
     function fillProtocolSelect(select, protocols, selectedId) {
-        var groupedByCategory = groupProtocolsByCategory(protocols);
-
         clearElement(select);
-
-        // Native optgroups keep the catalog compact while preserving the curated category order.
-        groupedByCategory.forEach(function (group) {
-            var optgroup = createElement("optgroup", {
-                label: t(CATEGORY_MAP[group.categoryId].labelKey)
-            });
+        groupProtocolsByCategory(protocols).forEach(function (group) {
+            var optgroup = createElement("optgroup", { label: CATEGORY_MAP[group.categoryId].label });
 
             group.protocols.forEach(function (protocol) {
                 optgroup.appendChild(createElement("option", {
                     value: protocol.id,
-                    textContent: formatProtocolOptionLabel(protocol),
-                    title: getProtocolShortDescription(protocol)
+                    textContent: protocol.id === "quic" ? protocol.label + " ★" : protocol.label,
+                    title: protocol.descriptor
                 }));
             });
 
             select.appendChild(optgroup);
         });
-
         select.value = selectedId;
     }
 
     function updateBlockUi() {
+        var shouldHideRemove = getBlockCount() <= 1;
+
         getBlocks().forEach(function (block, index) {
             var refs = getBlockRefs(block);
-
-            refs.title.textContent = t("payloadBlockTitle") + " (i" + (index + 1) + ")";
-            refs.removeButton.hidden = index === 0;
+            refs.title.textContent = UI.payloadTitle + " (i" + (index + 1) + ")";
+            refs.removeButton.hidden = shouldHideRemove;
         });
 
         dom.addButton.disabled = getBlockCount() >= CONFIG.maxBlocks;
@@ -626,32 +665,22 @@
 
         clearAllErrors();
 
-        // Check if any blocks use async-only formatting or generation.
         getBlocks().forEach(function (block) {
             if (block._state.protocolId === "quic" && shouldUseAsyncQuicOutput(collectProtocolOptions(block))) {
                 hasAsyncProtocols = true;
             }
         });
 
-        if (hasAsyncProtocols && typeof Generators.generatePayloadAsync === "function") {
-            // Use async generation
+        if (hasAsyncProtocols && typeof ensureGenerators().generatePayloadAsync === "function") {
             generateOutputAsync().then(function (result) {
                 dom.output.value = result.lines.join("\n");
-                setGenerationStatus(result.lines, result.capped, result.mtu);
             }).catch(function (error) {
-                setStatus("noOutput", "error");
                 console.error("Async generation failed:", error);
             });
 
-            return {
-                mtu: mtu,
-                lines: [],
-                capped: false,
-                pending: true
-            };
+            return { mtu: mtu, lines: [], capped: false, pending: true };
         }
 
-        // Synchronous generation
         getBlocks().forEach(function (block) {
             if (lines.length >= CONFIG.maxOutputLines) {
                 capped = true;
@@ -666,13 +695,7 @@
         });
 
         dom.output.value = lines.join("\n");
-        setGenerationStatus(lines, capped, mtu);
-
-        return {
-            mtu: mtu,
-            lines: lines,
-            capped: capped
-        };
+        return { mtu: mtu, lines: lines, capped: capped };
     }
 
     async function generateOutputAsync() {
@@ -681,129 +704,70 @@
         var lines = [];
         var capped = false;
         var blocks = getBlocks();
+        var index;
 
         clearAllErrors();
 
-        for (var i = 0; i < blocks.length; i++) {
-            var block = blocks[i];
-            
+        for (index = 0; index < blocks.length; index += 1) {
             if (lines.length >= CONFIG.maxOutputLines) {
                 capped = true;
                 break;
             }
 
             try {
-                capped = await appendBlockLinesAsync(lines, block, mtu, padMtu) || capped;
+                capped = await appendBlockLinesAsync(lines, blocks[index], mtu, padMtu) || capped;
             } catch (error) {
-                setBlockError(block, error && error.message ? error.message : "Failed to generate this payload.");
+                setBlockError(blocks[index], error && error.message ? error.message : "Failed to generate this payload.");
             }
         }
 
-        return {
-            mtu: mtu,
-            lines: lines,
-            capped: capped
-        };
+        return { mtu: mtu, lines: lines, capped: capped };
     }
 
     function appendBlockLines(lines, block, mtu, padMtu) {
-        var options = collectProtocolOptions(block);
-        var protocolId = block._state.protocolId;
-
-        if (protocolId === "quic" && isSplitModeEnabled(options.quicAwgLevel)) {
-            throw new Error("AWG segmented QUIC output requires async generation.");
-        }
-
-        var payloadBytes = generatePayload(protocolId, options);
-        var chunks = chunkPayload(payloadBytes, mtu, padMtu);
-
-        return appendChunkLines(lines, chunks, protocolId, options);
+        return appendChunkLines(lines, chunkPayload(ensureGenerators().generatePayload(block._state.protocolId, collectProtocolOptions(block)), mtu, padMtu));
     }
 
     async function appendBlockLinesAsync(lines, block, mtu, padMtu) {
+        var generators = ensureGenerators();
         var options = collectProtocolOptions(block);
-        var protocolId = block._state.protocolId;
-        var payloadBytes;
+        var payloadBytes = block._state.protocolId === "quic" && shouldUseAsyncQuicOutput(options) && typeof generators.generatePayloadAsync === "function"
+            ? await generators.generatePayloadAsync(block._state.protocolId, options)
+            : generators.generatePayload(block._state.protocolId, options);
 
-        if (protocolId === "quic" && isSplitModeEnabled(options.quicAwgLevel)) {
-            if (lines.length >= CONFIG.maxOutputLines) {
-                return true;
-            }
-
-            if (typeof Generators.generateQuicAwgSignaturePartsAsync !== "function" &&
-                typeof Generators.generateQuicAwgSignatureAsync !== "function") {
-                throw new Error("AWG segmented QUIC output is not available in this build.");
-            }
-
-            var awgResult;
-
-            if (typeof Generators.generateQuicAwgSignaturePartsAsync === "function") {
-                awgResult = await Generators.generateQuicAwgSignaturePartsAsync(options);
-            } else {
-                awgResult = {
-                    expression: await Generators.generateQuicAwgSignatureAsync(options),
-                    packetLength: 0
-                };
-            }
-
-            lines.push(formatOutputExpressionLine(
-                lines.length + 1,
-                maybePadAwgExpression(awgResult.expression, awgResult.packetLength, mtu, padMtu)
-            ));
-            return false;
-        }
-
-        // Use async generator for protocols that support it
-        if (typeof Generators.generatePayloadAsync === "function" && 
-            (protocolId === "quic" && shouldUseAsyncQuicOutput(options))) {
-            payloadBytes = await Generators.generatePayloadAsync(protocolId, options);
-        } else {
-            payloadBytes = generatePayload(protocolId, options);
-        }
-
-        var chunks = chunkPayload(payloadBytes, mtu, padMtu);
-
-        return appendChunkLines(lines, chunks, protocolId, options);
+        return appendChunkLines(lines, chunkPayload(payloadBytes, mtu, padMtu));
     }
 
     function collectProtocolOptions(block) {
         var protocol = getProtocolMeta(block._state.protocolId);
         var options = {};
 
-        getProtocolOptionFieldIds(protocol).forEach(function (fieldId) {
-            var value = getResolvedOptionValue(block, protocol, fieldId);
+        protocol.fieldSet.forEach(function (fieldId) {
+            var value = Object.prototype.hasOwnProperty.call(block._state.values, fieldId) ? block._state.values[fieldId] : getFieldDefault(protocol, fieldId);
 
             if (fieldId === "host") {
                 options.host = normalizeHost(value);
-                return;
-            }
-
-            if (fieldId === "path") {
+            } else if (fieldId === "path") {
                 options.path = normalizePath(value);
-                return;
-            }
-
-            if (FIELD_DEFS[fieldId].type === "checkbox") {
+            } else if (FIELD_DEFS[fieldId].type === "checkbox") {
                 options[fieldId] = !!value;
-                return;
+            } else {
+                options[fieldId] = String(value);
             }
-
-            options[fieldId] = String(value);
         });
 
-        if (options.browserProfile && !options.browserVersion) {
-            options.browserVersion = getBrowserDefaultVersion(options.browserProfile);
+        if (protocolUsesField(protocol, "browserVersion") && !options.browserVersion) {
+            options.browserVersion = getChromeDefaultVersion();
         }
 
         if (protocol.id === "quic") {
             options.quicEncrypt = true;
-            options.quicVersion = String(options.quicVersion || "v1");
         }
 
         return options;
     }
 
-    function appendChunkLines(lines, chunks, protocolId, options) {
+    function appendChunkLines(lines, chunks) {
         var wasCapped = false;
         var index;
 
@@ -813,44 +777,14 @@
                 break;
             }
 
-            lines.push(formatChunkLine(lines.length + 1, chunks[index], protocolId, options));
+            lines.push("i" + (lines.length + 1) + "=<b 0x" + bytesToHex(chunks[index]) + ">");
         }
 
         return wasCapped;
     }
 
-    function formatChunkLine(lineNumber, chunk, protocolId, options) {
-        if (shouldUseGenericSplitOutput(protocolId, options)) {
-            return formatOutputExpressionLine(lineNumber, formatGenericSplitExpression(chunk, options.awgSplitMode));
-        }
-
-        return formatOutputLine(lineNumber, chunk);
-    }
-
-    function shouldUseGenericSplitOutput(protocolId, options) {
-        return protocolId !== "quic" && !!(options && isSplitModeEnabled(options.awgSplitMode));
-    }
-
-    function getResolvedOptionValue(block, protocol, fieldId) {
-        if (Object.prototype.hasOwnProperty.call(block._state.values, fieldId)) {
-            return block._state.values[fieldId];
-        }
-
-        return getFieldDefault(protocol, fieldId);
-    }
-
-    function setGenerationStatus(lines, capped, mtu) {
-        if (lines.length === 0) {
-            setStatus("noOutput", "error");
-            return;
-        }
-
-        if (capped) {
-            setStatus("generatedCapped", "info", { count: lines.length, mtu: mtu });
-            return;
-        }
-
-        setStatus("generated", "info", { count: lines.length, mtu: mtu });
+    function shouldUseAsyncQuicOutput(options) {
+        return !!(options && options.quicEncrypt);
     }
 
     function copyOutput() {
@@ -861,130 +795,27 @@
         }
 
         if (!content) {
-            setStatus("copyEmpty", "error");
             return Promise.resolve(false);
         }
 
-        return copyText(content).then(function () {
-            setStatus("copied", "info", { count: content.split("\n").length });
-            return true;
-        }).catch(function () {
-            setStatus("copyFailed", "error");
-            return false;
-        });
-    }
-
-    function copyText(text) {
-        var secureClipboardAvailable = typeof navigator !== "undefined" &&
+        if (typeof navigator !== "undefined" &&
             navigator.clipboard &&
             typeof navigator.clipboard.writeText === "function" &&
             typeof isSecureContext !== "undefined" &&
-            isSecureContext;
-
-        if (secureClipboardAvailable) {
-            return navigator.clipboard.writeText(text);
+            isSecureContext) {
+            return navigator.clipboard.writeText(content).then(function () { return true; }).catch(function () { return false; });
         }
 
-        return new Promise(function (resolve, reject) {
+        return new Promise(function (resolve) {
             try {
                 dom.output.focus();
                 dom.output.select();
                 dom.output.setSelectionRange(0, dom.output.value.length);
-
-                if (typeof document !== "undefined" && typeof document.execCommand === "function" && document.execCommand("copy")) {
-                    resolve();
-                    return;
-                }
+                resolve(!!(typeof document !== "undefined" && typeof document.execCommand === "function" && document.execCommand("copy")));
             } catch (error) {
-                reject(error);
-                return;
+                resolve(false);
             }
-
-            reject(new Error("Copy command was not available."));
         });
-    }
-
-    function setStatus(key, tone, data) {
-        state.status = {
-            key: key,
-            tone: tone || "info",
-            data: data || {}
-        };
-        renderStatus();
-    }
-
-    function renderStatus() {
-        var tone = state.status.tone || "info";
-
-        dom.status.textContent = getStatusText(state.status.key, state.status.data);
-
-        Object.keys(STATUS_CLASS_BY_TONE).forEach(function (statusTone) {
-            dom.status.classList.remove(STATUS_CLASS_BY_TONE[statusTone]);
-        });
-
-        if (STATUS_CLASS_BY_TONE[tone]) {
-            dom.status.classList.add(STATUS_CLASS_BY_TONE[tone]);
-        }
-    }
-
-    function getStatusText(key, data) {
-        if (key === "addedBlock") {
-            return t("statusAddedBlock");
-        }
-
-        if (key === "removedBlock") {
-            return t("statusRemovedBlock");
-        }
-
-        if (key === "reset") {
-            return t("statusReset");
-        }
-
-        if (key === "ready") {
-            return t("statusReady");
-        }
-
-        if (key === "noOutput") {
-            return t("statusNoOutput");
-        }
-
-        if (key === "copyEmpty") {
-            return t("statusCopyEmpty");
-        }
-
-        if (key === "copyFailed") {
-            return t("statusCopyFailed");
-        }
-
-        if (key === "randomDomainNoTargets") {
-            return t("statusRandomDomainNoTargets");
-        }
-
-        if (key === "generated") {
-            return state.locale === "ru"
-                ? "Сгенерировано частей payload: " + data.count + ". MTU " + data.mtu + "."
-                : "Generated " + data.count + " payload part(s) using MTU " + data.mtu + ".";
-        }
-
-        if (key === "generatedCapped") {
-            return state.locale === "ru"
-                ? "Сгенерировано частей payload: " + data.count + ". " + t("statusCappedOutput")
-                : "Generated " + data.count + " payload part(s). " + t("statusCappedOutput");
-        }
-
-        if (key === "copied") {
-            return state.locale === "ru"
-                ? "Скопировано строк payload: " + data.count + "."
-                : "Copied " + data.count + " payload line(s) to the clipboard.";
-        }
-
-        if (key === "randomDomainApplied") {
-            return state.locale === "ru"
-                ? "Выбран домен " + data.domain + " из рейтинга " + data.ranking + " и применён к " + data.count + " блок(ам)."
-                : "Picked " + data.domain + " from the " + data.ranking + " ranking and applied it to " + data.count + " block(s).";
-        }
-
-        return t("statusReady");
     }
 
     function getBlocks() {
@@ -1038,287 +869,17 @@
 
     function normalizePath(rawValue) {
         var path = String(rawValue || "").trim();
-
-        if (!path) {
-            return "/";
-        }
-
-        if (path.charAt(0) !== "/") {
-            return "/" + path;
-        }
-
-        return path;
+        return !path ? "/" : (path.charAt(0) === "/" ? path : "/" + path);
     }
 
-    function formatOutputLine(lineNumber, bytes) {
-        return "i" + lineNumber + "=<b 0x" + bytesToHex(bytes) + ">";
-    }
-
-    function formatOutputExpressionLine(lineNumber, expression) {
-        return "i" + lineNumber + "=" + String(expression || "");
-    }
-
-    function maybePadAwgExpression(expression, packetLength, mtu, padMtu) {
-        if (!padMtu || !Number.isFinite(packetLength) || packetLength <= 0 || packetLength >= mtu) {
-            return String(expression || "");
-        }
-
-        return String(expression || "") + "<b 0x" + repeatHexByte("00", mtu - packetLength) + ">";
-    }
-
-    function repeatHexByte(hexByte, count) {
-        return new Array(Math.max(0, count) + 1).join(String(hexByte || ""));
-    }
-
-    function normalizeSplitMode(level) {
-        var normalized = String(level == null ? "" : level).trim().toLowerCase();
-
-        if (!normalized || normalized === "off") {
-            return null;
-        }
-
-        if (normalized === "0" || normalized === "1" || normalized === "2" || normalized === "3" || normalized === "4") {
-            return normalized;
-        }
-
-        return "0";
-    }
-
-    function isSplitModeEnabled(level) {
-        return normalizeSplitMode(level) !== null;
-    }
-
-    function shouldUseAsyncQuicOutput(options) {
-        return !!(options && (options.quicEncrypt || isSplitModeEnabled(options.quicAwgLevel)));
-    }
-
-    function formatGenericSplitExpression(bytes, level) {
-        var normalized = normalizeSplitMode(level);
-        var length = bytes.length;
-        var prefixEnd;
-        var hiddenEnd;
-        var suffixStart;
-
-        if (normalized == null || length === 0) {
-            return "<b 0x" + bytesToHex(bytes) + ">";
-        }
-
-        if (normalized === "0") {
-            prefixEnd = Math.min(length, Math.max(1, Math.min(8, length)));
-            hiddenEnd = Math.min(length, prefixEnd + Math.max(1, Math.min(16, length - prefixEnd)));
-            return buildSplitExpression(bytes, [
-                { visible: true, start: 0, end: prefixEnd },
-                { visible: false, start: prefixEnd, end: hiddenEnd },
-                { visible: true, start: hiddenEnd, end: length }
-            ]);
-        }
-
-        if (normalized === "1") {
-            prefixEnd = Math.min(length, Math.max(1, Math.floor(length / 3)));
-            hiddenEnd = Math.min(length, prefixEnd + Math.max(1, Math.floor(length / 3)));
-            return buildSplitExpression(bytes, [
-                { visible: true, start: 0, end: prefixEnd },
-                { visible: false, start: prefixEnd, end: hiddenEnd },
-                { visible: true, start: hiddenEnd, end: length }
-            ]);
-        }
-
-        if (normalized === "2") {
-            prefixEnd = Math.min(length, Math.max(1, Math.floor(length / 4)));
-            hiddenEnd = Math.min(length, prefixEnd + Math.max(1, Math.floor(length / 2)));
-            return buildSplitExpression(bytes, [
-                { visible: true, start: 0, end: prefixEnd },
-                { visible: false, start: prefixEnd, end: hiddenEnd },
-                { visible: true, start: hiddenEnd, end: length }
-            ]);
-        }
-
-        if (normalized === "3") {
-            return buildSplitExpression(bytes, [
-                { visible: true, start: 0, end: Math.min(1, length) },
-                { visible: false, start: Math.min(1, length), end: length }
-            ]);
-        }
-
-        suffixStart = Math.max(1, length - Math.min(8, Math.max(0, length - 1)));
-
-        while (suffixStart < length && bytes[suffixStart] === 0) {
-            suffixStart += 1;
-        }
-
-        return buildSplitExpression(bytes, [
-            { visible: true, start: 0, end: Math.min(1, length) },
-            { visible: false, start: Math.min(1, length), end: Math.min(suffixStart, length) },
-            { visible: true, start: Math.min(suffixStart, length), end: length }
-        ]);
-    }
-
-    function buildSplitExpression(bytes, segments) {
-        var expression = "";
-
-        segments.forEach(function (segment) {
-            var start = Math.max(0, segment.start);
-            var end = Math.max(start, Math.min(bytes.length, segment.end));
-
-            if (end <= start) {
-                return;
-            }
-
-            if (segment.visible) {
-                expression += "<b 0x" + bytesToHex(bytes.slice(start, end)) + ">";
-                return;
-            }
-
-            expression += "<r " + (end - start) + ">";
-        });
-
-        return expression || "<b 0x" + bytesToHex(bytes) + ">";
-    }
-
-    function t(key) {
-        return (LOCALES[state.locale] && LOCALES[state.locale][key]) ||
-            LOCALES.en[key] ||
-            key;
-    }
-
-    function detectLocale() {
-        var browserLocale;
-
-        browserLocale = typeof navigator !== "undefined" ? String(navigator.language || "").toLowerCase() : "";
-        return browserLocale.indexOf("ru") === 0 ? "ru" : "en";
-    }
-
-    function getInitialLocale() {
-        var storedLocale = getStoredValue(STORAGE_KEYS.locale);
-
-        if (storedLocale === "ru" || storedLocale === "en") {
-            return storedLocale;
-        }
-
-        return detectLocale();
-    }
-
-    function getStoredValue(key) {
-        try {
-            if (typeof root.localStorage === "undefined") {
-                return null;
-            }
-
-            return root.localStorage.getItem(key);
-        } catch (error) {
-            return null;
-        }
-    }
-
-    function setStoredValue(key, value) {
-        try {
-            if (typeof root.localStorage === "undefined") {
-                return;
-            }
-
-            root.localStorage.setItem(key, value);
-        } catch (error) {
-            return;
-        }
-    }
-
-    function getTransportLabelKey(transport) {
-        return transport === "tcp" ? "transportTcp" : "transportUdp";
-    }
-
-    function getProtocolShortDescription(protocol) {
-        return truncateText(t(protocol.descriptorKey), 160);
-    }
-
-    function formatProtocolSummary(protocol) {
-        var transport = t(getTransportLabelKey(protocol.transport));
-        var summary = getProtocolShortDescription(protocol);
-
-        if (summary.charAt(summary.length - 1) !== ".") {
-            summary += ".";
-        }
-
-        var portInfo = protocol.port ? "port: " + protocol.port + " | " : "";
-        return transport + " | " + portInfo + summary;
-    }
-
-    function getProtocolWikiUrl(protocolId) {
-        var localeUrls = PROTOCOL_WIKI_URLS[state.locale] || {};
-        return localeUrls[protocolId] || PROTOCOL_WIKI_URLS.en[protocolId] || "#";
-    }
-
-    function getResolvedBrowserProfile(block, protocol) {
-        if (Object.prototype.hasOwnProperty.call(block._state.values, "browserProfile")) {
-            return String(block._state.values.browserProfile);
-        }
-
-        return getFieldDefault(protocol, "browserProfile");
-    }
-
-    function getBrowserDefaultVersion(profileId) {
-        var browserProfile = Data.BROWSER_PROFILES[profileId] || Data.BROWSER_PROFILES.chrome;
-        return browserProfile.defaultVersion;
-    }
-
-    function isKnownProtocol(protocolId) {
-        return Object.prototype.hasOwnProperty.call(PROTOCOL_MAP, protocolId);
-    }
-
-    function getProtocolMeta(protocolId) {
-        return PROTOCOL_MAP[protocolId] || PROTOCOL_CATALOG[0];
-    }
-
-    function protocolUsesField(protocol, fieldId) {
-        return protocol.fieldSet.indexOf(fieldId) !== -1;
-    }
-
-    function getRankedDomainPool() {
-        return DOMAIN_SNAPSHOTS.ru;
-    }
-
-    function pickWeightedRankedDomain(domains) {
-        var totalWeight = 0;
-        var roll;
-        var index;
-
-        if (!domains || !domains.length) {
-            return CONFIG.defaultHost;
-        }
-
-        for (index = 0; index < domains.length; index += 1) {
-            totalWeight += domains.length - index;
-        }
-
-        roll = randomIntExclusive(totalWeight);
-
-        for (index = 0; index < domains.length; index += 1) {
-            roll -= domains.length - index;
-
-            if (roll < 0) {
-                return domains[index];
-            }
-        }
-
-        return domains[0];
-    }
-
-    function randomIntExclusive(maxExclusive) {
-        return Math.floor(Math.random() * Math.max(1, maxExclusive));
+    function getChromeDefaultVersion() {
+        return SharedData.CHROME_BROWSER_DATA.defaultVersion;
     }
 
     function listProtocols() {
         return PROTOCOL_CATALOG.slice().sort(function (left, right) {
             var categoryCompare = CATEGORY_MAP[left.categoryId].rank - CATEGORY_MAP[right.categoryId].rank;
-
-            if (categoryCompare !== 0) {
-                return categoryCompare;
-            }
-
-            if (left.rank !== right.rank) {
-                return left.rank - right.rank;
-            }
-
-            return t(left.labelKey).localeCompare(t(right.labelKey));
+            return categoryCompare || left.rank - right.rank || left.label.localeCompare(right.label);
         });
     }
 
@@ -1338,29 +899,177 @@
     }
 
     function protocolListHasId(protocols, protocolId) {
-        return protocols.some(function (protocol) {
-            return protocol.id === protocolId;
+        return protocols.some(function (protocol) { return protocol.id === protocolId; });
+    }
+
+    function pickWeightedRankedDomain(domains) {
+        var totalWeight = 0;
+        var roll;
+        var index;
+
+        if (!domains || !domains.length) {
+            return CONFIG.defaultHost;
+        }
+
+        for (index = 0; index < domains.length; index += 1) {
+            totalWeight += domains.length - index;
+        }
+
+        roll = Math.floor(Math.random() * Math.max(1, totalWeight));
+
+        for (index = 0; index < domains.length; index += 1) {
+            roll -= domains.length - index;
+            if (roll < 0) {
+                return domains[index];
+            }
+        }
+
+        return domains[0];
+    }
+
+    function isKnownProtocol(protocolId) {
+        return Object.prototype.hasOwnProperty.call(PROTOCOL_MAP, protocolId);
+    }
+
+    function getProtocolMeta(protocolId) {
+        return PROTOCOL_MAP[protocolId] || PROTOCOL_CATALOG[0];
+    }
+
+    function protocolUsesField(protocol, fieldId) {
+        return protocol.fieldSet.indexOf(fieldId) !== -1;
+    }
+
+    function createMapById(items) {
+        return items.reduce(function (map, item) {
+            map[item.id] = item;
+            return map;
+        }, {});
+    }
+
+    function createField(label, control, className) {
+        return createElement("label", {
+            className: className,
+            children: [createElement("span", { className: "field-label", textContent: label }), control]
         });
     }
 
-    function isPopularProtocol(protocolId) {
-        return POPULAR_PROTOCOL_IDS.indexOf(protocolId) !== -1;
+    function createCheckboxField(label, control, className) {
+        return createElement("label", {
+            className: className,
+            children: [
+                createElement("span", {
+                    className: "checkbox-row",
+                    children: [control, createElement("span", { className: "checkbox-label", textContent: label })]
+                })
+            ]
+        });
     }
 
-    function formatProtocolOptionLabel(protocol) {
-        return t(protocol.labelKey) + (isPopularProtocol(protocol.id) ? " ★" : "");
+    function createButton(label, className) {
+        return createElement("button", { type: "button", className: className, textContent: label });
     }
 
-    function truncateText(text, maxLength) {
-        var normalized = String(text || "").trim();
+    function getRequiredElement(id) {
+        var element = document.getElementById(id);
 
-        if (normalized.length <= maxLength) {
-            return normalized;
+        if (!element) {
+            throw new Error("PayloadGen failed to initialize because #" + id + " is missing.");
         }
 
-        return normalized.slice(0, Math.max(0, maxLength - 1)).trimEnd() + "…";
+        return element;
     }
 
+    function setElementText(element, text) {
+        element.textContent = text;
+    }
+
+    function setElementHtml(element, html) {
+        element.innerHTML = html;
+    }
+
+    function clearElement(element) {
+        while (element.firstChild) {
+            element.removeChild(element.firstChild);
+        }
+    }
+
+    function createElement(tagName, options) {
+        var element = document.createElement(tagName);
+        var key;
+
+        options = options || {};
+
+        for (key in options) {
+            if (!Object.prototype.hasOwnProperty.call(options, key) || key === "children") {
+                continue;
+            }
+
+            if (key in element) {
+                element[key] = options[key];
+            } else {
+                element.setAttribute(key, options[key]);
+            }
+        }
+
+        if (options.children) {
+            options.children.forEach(function (child) {
+                element.appendChild(child);
+            });
+        }
+
+        return element;
+    }
+
+    function chunkPayload(payloadBytes, mtu, padMtu) {
+        var chunks = [];
+        var offset = 0;
+        var slice;
+        var padded;
+
+        if (payloadBytes.length === 0) {
+            return padMtu ? [new Uint8Array(mtu)] : [payloadBytes];
+        }
+
+        while (offset < payloadBytes.length) {
+            slice = payloadBytes.slice(offset, Math.min(offset + mtu, payloadBytes.length));
+
+            if (padMtu && slice.length < mtu) {
+                padded = new Uint8Array(mtu);
+                padded.set(slice);
+                slice = padded;
+            }
+
+            chunks.push(slice);
+            offset += mtu;
+        }
+
+        return chunks;
+    }
+
+    function bytesToHex(bytes) {
+        var hex = "";
+        var index;
+        var value;
+
+        for (index = 0; index < bytes.length; index += 1) {
+            value = bytes[index].toString(16);
+            hex += value.length === 1 ? "0" + value : value;
+        }
+
+        return hex;
+    }
+
+    function formatProtocolSummary(protocol) {
+        var transport = protocol.transport === "tcp" ? "TCP" : "UDP";
+        var summary = String(protocol.descriptor || "").trim();
+        var portInfo = protocol.port ? "port: " + protocol.port + " | " : "";
+
+        if (summary && summary.charAt(summary.length - 1) !== ".") {
+            summary += ".";
+        }
+
+        return transport + " | " + portInfo + summary;
+    }
 
     return {
         init: init,
@@ -1370,7 +1079,7 @@
             DEFAULT_MTU: CONFIG.defaultMtu,
             DEFAULT_HOST: CONFIG.defaultHost,
             CATEGORY_DEFS: CATEGORY_DEFS,
-            DOMAIN_SNAPSHOTS: DOMAIN_SNAPSHOTS,
+            DOMAIN_SNAPSHOTS: { global: DOMAIN_POOL.slice() },
             PROTOCOL_CATALOG: PROTOCOL_CATALOG
         },
         catalog: {
@@ -1384,7 +1093,9 @@
             pickWeightedRankedDomain: pickWeightedRankedDomain
         },
         generators: {
-            generatePayload: generatePayload
+            generatePayload: function (protocolId, options) {
+                return ensureGenerators().generatePayload(protocolId, options);
+            }
         }
     };
 }));

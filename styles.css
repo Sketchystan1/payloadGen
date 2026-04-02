@@ -1,59 +1,20 @@
 :root {
-    color-scheme: light;
-    --bg: #ffffff;
-    --panel: #ffffff;
-    --panel-subtle: #f7f7f7;
-    --border: #cfcfcf;
-    --border-strong: #9a9a9a;
-    --text: #111111;
-    --muted: #555555;
-    --button: #efefef;
-    --button-hover: #dcdcdc;
-    --button-disabled: #f4f4f4;
-    --info: #eef4ff;
-    --error: #fff0f0;
-    --success: #f4f4f4;
-    --focus: #3366cc;
-    --font-sans: "Segoe UI", Tahoma, Arial, sans-serif;
-    --font-mono: "Consolas", "Courier New", monospace;
-}
-
-:root[data-theme="dark"] {
     color-scheme: dark;
     --bg: #111111;
-    --panel: #1a1a1a;
-    --panel-subtle: #222222;
-    --border: #404040;
-    --border-strong: #6a6a6a;
-    --text: #f3f3f3;
-    --muted: #c3c3c3;
-    --button: #2a2a2a;
-    --button-hover: #343434;
-    --button-disabled: #242424;
-    --info: #1a2331;
-    --error: #2c1a1a;
-    --success: #222222;
-    --focus: #7aa2ff;
-}
-
-@media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) {
-        color-scheme: dark;
-        --bg: #111111;
-        --panel: #1a1a1a;
-        --panel-subtle: #222222;
-        --border: #404040;
-        --border-strong: #6a6a6a;
-        --text: #f3f3f3;
-        --muted: #c3c3c3;
-        --button: #2a2a2a;
-        --button-hover: #343434;
-        --button-disabled: #242424;
-        --info: #1a2331;
-        --error: #2c1a1a;
-        --success: #222222;
-        --focus: #7aa2ff;
-    }
+    --panel: #181818;
+    --panel-subtle: #151515;
+    --border: #3a3a3a;
+    --border-strong: #555555;
+    --text: #f0f0f0;
+    --muted: #9a9a9a;
+    --button: #222222;
+    --button-primary: #2d5fd3;
+    --button-primary-hover: #3a6ce0;
+    --button-disabled: #1d1d1d;
+    --focus: #7aa7ff;
+    --danger: #ff9e9e;
+    --font-sans: "Segoe UI", Tahoma, Arial, sans-serif;
+    --font-mono: "Consolas", "Courier New", monospace;
 }
 
 * {
@@ -64,6 +25,7 @@ html,
 body {
     margin: 0;
     padding: 0;
+    min-height: 100%;
     background: var(--bg);
     color: var(--text);
     font-family: var(--font-sans);
@@ -98,6 +60,12 @@ textarea,
 button {
     color: inherit;
     font: inherit;
+}
+
+input::placeholder,
+textarea::placeholder {
+    color: var(--muted);
+    opacity: 1;
 }
 
 input:focus-visible,
@@ -138,20 +106,10 @@ textarea:focus-visible,
     justify-content: flex-end;
 }
 
-.locale-toggle {
-    display: inline-flex;
-    gap: 6px;
-}
-
 .intro,
-.note,
-.section-text,
-.payload-meta {
+.payload-meta,
+.protocol-info {
     color: var(--muted);
-}
-
-.small-note {
-    margin-bottom: 0;
 }
 
 .panel {
@@ -161,11 +119,11 @@ textarea:focus-visible,
     margin-bottom: 16px;
 }
 
-.controls-panel h2,
-.blocks-panel h2,
-.output-panel h2 {
-    margin-bottom: 12px;
-    font-size: 20px;
+.layout-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    align-items: start;
+    gap: 16px;
 }
 
 .toolbar {
@@ -173,9 +131,6 @@ textarea:focus-visible,
     flex-wrap: wrap;
     gap: 12px;
     align-items: end;
-}
-
-.output-panel .toolbar {
     margin-bottom: 12px;
 }
 
@@ -202,9 +157,10 @@ textarea:focus-visible,
 input:not([type="checkbox"]),
 select,
 textarea,
-.btn {
+.btn,
+.checkbox-field {
     border: 1px solid var(--border-strong);
-    background: var(--panel);
+    background: var(--panel-subtle);
     padding: 8px 10px;
     font-size: 14px;
 }
@@ -226,23 +182,22 @@ textarea {
     text-decoration: none;
 }
 
-.btn-icon {
-    display: inline-flex;
-    width: 1em;
-    height: 1em;
-    margin-left: 0.45rem;
-    vertical-align: -0.125em;
+.btn-primary {
+    background: var(--button-primary);
 }
 
-.btn-icon svg {
-    width: 100%;
-    height: 100%;
-    fill: currentColor;
+.btn-primary:hover,
+.btn-primary:focus-visible {
+    background: var(--button-primary-hover);
 }
 
+.btn-secondary:hover,
+.btn-secondary:focus-visible,
+.btn-ghost:hover,
+.btn-ghost:focus-visible,
 .btn:hover,
 .btn:focus-visible {
-    background: var(--button-hover);
+    background: #2a2a2a;
 }
 
 .btn:disabled {
@@ -251,26 +206,26 @@ textarea {
     cursor: not-allowed;
 }
 
-.status-banner {
-    margin: 0 0 12px;
-    padding: 8px 10px;
-    border: 1px solid var(--border);
-    background: var(--success);
+.donate-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 42px;
+    min-width: 42px;
+    padding: 8px;
 }
 
-.status-banner.status-info {
-    background: var(--info);
+.btn-icon {
+    display: inline-flex;
+    width: 1.1rem;
+    height: 1.1rem;
+    vertical-align: -0.125em;
 }
 
-.status-banner.status-error {
-    background: var(--error);
-}
-
-.layout-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    align-items: start;
-    gap: 16px;
+.btn-icon svg {
+    width: 100%;
+    height: 100%;
+    fill: currentColor;
 }
 
 .payload-blocks {
@@ -328,7 +283,6 @@ textarea {
     align-items: center;
     gap: 8px;
     margin-bottom: 10px;
-    color: var(--muted);
     font-size: 13px;
 }
 
@@ -338,12 +292,6 @@ textarea {
 
 .protocol-link {
     text-decoration: underline;
-}
-
-.checkbox-field {
-    border: 1px solid var(--border-strong);
-    background: var(--panel);
-    padding: 8px 10px;
 }
 
 .checkbox-row {
@@ -390,21 +338,6 @@ textarea {
     margin: 0;
 }
 
-.host-field-actions .inline-checkbox {
-    min-height: 36px;
-}
-
-.popular-protocol {
-    text-decoration: underline;
-    font-weight: 600;
-}
-
-.field-note {
-    margin: 8px 0 0;
-    color: var(--muted);
-    font-size: 13px;
-}
-
 .output-field {
     margin-bottom: 12px;
 }
@@ -412,18 +345,8 @@ textarea {
 .payload-error {
     min-height: 18px;
     margin: 8px 0 0;
-    color: #9b0000;
+    color: var(--danger);
     font-size: 13px;
-}
-
-:root[data-theme="dark"] .payload-error {
-    color: #ff9e9e;
-}
-
-@media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) .payload-error {
-        color: #ff9e9e;
-    }
 }
 
 .hidden {
@@ -454,6 +377,11 @@ textarea {
     .header-actions .btn,
     .button-row .btn {
         flex: 1 1 100%;
+    }
+
+    .donate-btn {
+        flex: 0 0 auto !important;
+        width: 42px !important;
     }
 
     .host-field-row {
