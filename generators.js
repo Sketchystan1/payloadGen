@@ -687,7 +687,13 @@
     }
 
     async function generateCapturedCurlQuicPayloadAsync(options) {
-        return await generateQuicPayloadAsync(await resolveCurlQuicOptionsAsync(options));
+        try {
+            var resolvedOptions = await resolveCurlQuicOptionsAsync(options);
+            return await generateQuicPayloadAsync(resolvedOptions);
+        } catch (error) {
+            console.warn("curl_quic ECH resolution failed, falling back to standard QUIC payload:", error && error.message ? error.message : error);
+            return await generateQuicPayloadAsync(withCapturedCurlQuicProfile(options));
+        }
     }
 
     function generateTlsClientHelloPayload(options) {
@@ -1955,8 +1961,8 @@
         return {
             useGrease: false,
             useSecondaryGrease: false,
-            cipherSuites: [0x1301, 0x1302, 0x1303],
-            extensionOrder: ["sni", "supported_versions", "supported_groups", "signature_algorithms", "alpn", "key_share", "psk_modes", "quic_transport_parameters", "compress_certificate"],
+            cipherSuites: [0x1301],
+            extensionOrder: ["sni", "supported_versions", "supported_groups", "signature_algorithms", "alpn", "key_share", "psk_modes", "quic_transport_parameters", "compress_certificate", "encrypted_client_hello"],
             supportedGroups: [0x001D, 0x0017, 0x0018],
             signatureAlgorithms: [0x0403, 0x0503, 0x0603, 0x0804, 0x0805, 0x0806],
             supportedVersions: [0x0304],

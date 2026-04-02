@@ -575,7 +575,8 @@
             group.protocols.forEach(function (protocol) {
                 optgroup.appendChild(createElement("option", {
                     value: protocol.id,
-                    textContent: isQuicLikeProtocolId(protocol.id) ? protocol.label + " ★" : protocol.label
+                    textContent: protocol.label,
+                    disabled: !isQuicLikeProtocolId(protocol.id)
                 }));
             });
 
