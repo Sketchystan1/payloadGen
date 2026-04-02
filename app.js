@@ -251,11 +251,24 @@
         bittorrent_dht: "https://en.wikipedia.org/wiki/Mainline_DHT"
     };
     var DOMAIN_POOL = [
-        "google.com", "youtube.com", "wikipedia.org", "amazon.com", "facebook.com", "reddit.com", "github.com",
-        "microsoft.com", "apple.com", "cloudflare.com", "openai.com", "instagram.com", "linkedin.com", "bing.com",
-        "netflix.com", "adobe.com", "paypal.com", "stackoverflow.com", "mozilla.org", "bbc.com", "cnn.com",
-        "nytimes.com", "office.com", "whatsapp.com", "discord.com", "dropbox.com", "twitch.tv", "zoom.us",
-        "spotify.com", "imdb.com"
+        "google.com", "amazon.com", "facebook.com", "reddit.com", "github.com", 
+        "microsoft.com", "apple.com", "cloudflare.com", "openai.com", "instagram.com", 
+        "linkedin.com", "bing.com", "adobe.com", "stackoverflow.com", "mozilla.org", "bbc.com", 
+        "cnn.com", "nytimes.com", "office.com", "dropbox.com", "zoom.us", "spotify.com", "imdb.com", 
+        "wikipedia.org", "yandex.ru", "ozon.ru", "vk.com", "google.com", "gismeteo.ru", "mail.ru", 
+        "kinopoisk.ru", "pinterest.com", "dzen.ru", "rutube.ru", "gdz.ru", "apple.com", "rbc.ru", 
+        "wildberries.ru", "asna.ru", "ya.ru", "vidal.ru", "banki.ru", "sberbank.ru", "ria.ru", "tbank.ru", 
+        "championat.com", "fandom.com", "rambler.ru", "kp.ru", "dns-shop.ru", "russianfood.com", "eapteka.ru",
+        "chatgpt.com", "avito.ru", "2gis.ru", "cbr.ru", "ivi.ru", "gosuslugi.ru", "pozdravok.com",
+        "microsoft.com", "kino-teatr.ru", "consultant.ru", "lenta.ru", "auto.ru", "smclinic.ru", 
+        "steampowered.com", "funpay.com", "rustore.ru", "okko.tv", "domclick.ru", "sports.ru", "cian.ru", 
+        "drom.ru", "investing.com", "gastronom.ru", "24smi.org", "sravni.ru", "iamcook.ru", "vseinstrumenti.ru", 
+        "planetazdorovo.ru", "wiktionary.org", "soccer365.ru", "aviasales.ru", "sovcombank.ru", "irecommend.ru",
+        "sportbox.ru", "freepik.com", "gemotest.ru", "invitro.ru", "github.com", "tutu.ru", "skysmart.ru", "vtb.ru", 
+        "goldapple.ru", "ok.ru", "kareliameteo.ru", "pikabu.ru", "deepl.com", "meteoinfo.ru", "tripadvisor.ru", 
+        "iz.ru", "megapteka.ru", "apteka.ru", "reverso.net", "hh.ru", "primpogoda.ru", "habr.com", 
+        "gdz-raketa.ru", "uchi.ru", "lamoda.ru", "deti-online.com", "promokodi.net", "gorzdrav.org", 
+        "uiscom.ru", "primbank.ru"
     ];
     var IDS = {
         pageTitle: "page-title",
