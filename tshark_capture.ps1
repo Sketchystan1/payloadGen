@@ -541,6 +541,28 @@ function Test-EtwInterfaceAvailable {
     }
 }
 
+function Resolve-EtwdumpPath {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$TsharkPath
+    )
+
+    $wiresharkDirectory = Split-Path -Parent $TsharkPath
+    $candidatePaths = @(
+        (Join-Path (Join-Path $wiresharkDirectory "extcap") "etwdump.exe"),
+        (Join-Path $wiresharkDirectory "etwdump.exe")
+    )
+
+    foreach ($candidatePath in $candidatePaths) {
+        if (Test-Path -LiteralPath $candidatePath) {
+            return $candidatePath
+        }
+    }
+
+    $expectedLocations = ($candidatePaths | ForEach-Object { "'$_'" }) -join ", "
+    throw "etwdump.exe was not found. Expected one of: $expectedLocations"
+}
+
 function Get-PidDisplayFilter {
     param(
         [Parameter(Mandatory = $true)]
@@ -565,6 +587,7 @@ function Wait-ForCaptureStartup {
         [System.Diagnostics.Process]$Process,
         [Parameter(Mandatory = $true)]
         [string]$StderrPath,
+        [string]$ReadyPattern = "Capturing on",
         [int]$TimeoutMilliseconds = 10000
     )
 
@@ -574,21 +597,27 @@ function Wait-ForCaptureStartup {
             break
         }
 
-        $stderrText = Get-TextFileContent -Path $StderrPath
-        if ($stderrText -and $stderrText -match "Capturing on") {
-            return
+        if (-not [string]::IsNullOrWhiteSpace($ReadyPattern)) {
+            $stderrText = Get-TextFileContent -Path $StderrPath
+            if ($stderrText -and $stderrText -match $ReadyPattern) {
+                return
+            }
         }
 
         Start-Sleep -Milliseconds 200
     }
 
+    if (-not $Process.HasExited -and [string]::IsNullOrWhiteSpace($ReadyPattern)) {
+        return
+    }
+
     if ($Process.HasExited) {
         $stderrText = Get-TextFileContent -Path $StderrPath
         if ($stderrText) {
-            throw "tshark exited before capture startup completed. stderr: $stderrText"
+            throw "Capture tool exited before capture startup completed. stderr: $stderrText"
         }
 
-        throw "tshark exited before capture startup completed."
+        throw "Capture tool exited before capture startup completed."
     }
 }
 
@@ -754,9 +783,7 @@ function Invoke-CaptureFiltering {
             ForEach-Object { ([string]$_).Trim() } |
             Where-Object { $_ -match '^\d+$' }
     ).Count
-    if ($packetCount -le 0) {
-        throw "Filtered capture does not contain any packets for the selected browser PID."
-    }
+    return $packetCount
 }
 
 function Request-ElevationIfNeeded {
@@ -789,6 +816,7 @@ if (-not (Test-Path -LiteralPath $TsharkPath)) {
 }
 
 Test-EtwInterfaceAvailable -Path $TsharkPath
+$etwdumpPath = Resolve-EtwdumpPath -TsharkPath $TsharkPath
 
 if (-not $ListBrowsers -and -not (Test-IsAdministrator)) {
     if (Request-ElevationIfNeeded -BoundParameters $PSBoundParameters -AllowPrompt (-not $SkipElevation.IsPresent)) {
@@ -826,14 +854,14 @@ $rawCapturePath = [System.IO.Path]::Combine([System.IO.Path]::GetTempPath(), ("p
 $etwProvider = "--p=Microsoft-Windows-NDIS-PacketCapture"
 
 $captureArguments = @(
-    "-i", "etwdump",
-    "-o", ("extcap.etwdump.params:{0}" -f $etwProvider),
-    "-w", $rawCapturePath,
-    "-q"
+    "--extcap-interface", "etwdump",
+    "--fifo", $rawCapturePath,
+    "--capture",
+    "--params", $etwProvider
 )
 
 if ($IncludeUndecidableEvents) {
-    $captureArguments += @("-o", "extcap.etwdump.iue:true")
+    $captureArguments += "--iue"
 }
 
 $captureProcess = $null
@@ -850,14 +878,18 @@ try {
     Write-Host "Press Enter to stop capture."
 
     $captureProcess = Start-Process `
-        -FilePath $TsharkPath `
+        -FilePath $etwdumpPath `
         -ArgumentList $captureArguments `
         -PassThru `
-        -WindowStyle Minimized `
+        -WindowStyle Hidden `
         -RedirectStandardOutput $stdoutPath `
         -RedirectStandardError $stderrPath
 
-    Wait-ForCaptureStartup -Process $captureProcess -StderrPath $stderrPath
+    Wait-ForCaptureStartup `
+        -Process $captureProcess `
+        -StderrPath $stderrPath `
+        -ReadyPattern $null `
+        -TimeoutMilliseconds 1500
     [void][System.Console]::ReadLine()
     Start-Sleep -Milliseconds 750
     Stop-CaptureProcess -Process $captureProcess
@@ -869,17 +901,22 @@ try {
     if (-not (Test-Path -LiteralPath $rawCapturePath)) {
         $captureStderr = Get-TextFileContent -Path $stderrPath
         if ($captureStderr) {
-            throw "Capture stopped, but raw capture '$rawCapturePath' was not created. tshark stderr: $captureStderr"
+            throw "Capture stopped, but raw capture '$rawCapturePath' was not created. capture stderr: $captureStderr"
         }
 
         throw "Capture stopped, but raw capture '$rawCapturePath' was not created."
     }
 
-    Invoke-CaptureFiltering `
+    $filteredPacketCount = Invoke-CaptureFiltering `
         -TsharkPath $TsharkPath `
         -InputCapturePath $rawCapturePath `
         -DisplayFilter $resolvedPidFilter `
         -OutputPath $OutputPath
+
+    if ($filteredPacketCount -le 0) {
+        Write-Host "No packets were found for the selected browser. Please try again with VPN or proxy disabled." -ForegroundColor Yellow
+        return
+    }
 
     $captureFile = Get-Item -LiteralPath $OutputPath
     $resolvedOutputPath = $captureFile.FullName
