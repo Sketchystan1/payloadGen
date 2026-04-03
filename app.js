@@ -150,15 +150,6 @@
         protocolLabel: "Protocol",
         payloadTitle: "Payload"
     };
-    var CATEGORY_DEFS = [
-        { id: "discovery", rank: 1, label: "Discovery" },
-        { id: "web", rank: 2, label: "Web" },
-        { id: "realtime", rank: 3, label: "Realtime" },
-        { id: "iot", rank: 4, label: "IoT" },
-        { id: "infra", rank: 5, label: "Infrastructure" },
-        { id: "messaging", rank: 6, label: "Messaging" },
-        { id: "p2p", rank: 7, label: "P2P" }
-    ];
     var OPTION_SETS = {
         sipActions: [{ value: "OPTIONS", label: "OPTIONS" }, { value: "REGISTER", label: "REGISTER" }],
         coapMethods: [{ value: "GET", label: "GET" }, { value: "POST", label: "POST" }],
@@ -176,23 +167,23 @@
         browserVersion: { type: "text", label: "Version", spellcheck: false }
     };
     var PROTOCOL_CATALOG = [
-        { id: "dns", categoryId: "discovery", rank: 1, label: "DNS", fieldSet: ["host"] },
-        { id: "mdns", categoryId: "discovery", rank: 2, label: "mDNS", fieldSet: ["host"] },
-        { id: "ssdp", categoryId: "discovery", rank: 3, label: "SSDP", fieldSet: [] },
-        { id: "llmnr", categoryId: "discovery", rank: 4, label: "LLMNR", fieldSet: ["host"] },
-        { id: "nbns", categoryId: "discovery", rank: 5, label: "NBNS", fieldSet: ["host"] },
-        { id: "quic", categoryId: "web", rank: 1, label: "QUIC", fieldSet: ["host"] },
-        { id: "curl_quic", categoryId: "web", rank: 2, label: "cURL", fieldSet: ["host"] }, 
-        { id: "stun", categoryId: "realtime", rank: 1, label: "STUN", fieldSet: ["host"] },
-        { id: "dtls", categoryId: "realtime", rank: 2, label: "DTLS (WebRTC)", fieldSet: ["host"] },
-        { id: "sip", categoryId: "realtime", rank: 3, label: "SIP", fieldSet: ["host", "sipAction"], defaults: { sipAction: "OPTIONS" } },
-        { id: "rtp", categoryId: "realtime", rank: 4, label: "RTP", fieldSet: [] },
-        { id: "rtcp", categoryId: "realtime", rank: 5, label: "RTCP", fieldSet: [] },
-        { id: "coap", categoryId: "iot", rank: 1, label: "CoAP", fieldSet: ["host", "path", "coapMethod"], defaults: { path: "/", coapMethod: "GET" } },
-        { id: "ntp", categoryId: "infra", rank: 1, label: "NTP", fieldSet: [] },
-        { id: "dhcp_discover", categoryId: "infra", rank: 2, label: "DHCP DISCOVER", fieldSet: [] },
-        { id: "utp", categoryId: "p2p", rank: 1, label: "uTP (BitTorrent)", fieldSet: [] },
-        { id: "bittorrent_dht", categoryId: "p2p", rank: 2, label: "BitTorrent DHT", fieldSet: [] }
+        { id: "bittorrent_dht", label: "BitTorrent DHT", fieldSet: [] },
+        { id: "coap", label: "CoAP", fieldSet: ["host", "path", "coapMethod"], defaults: { path: "/", coapMethod: "GET" } },
+        { id: "curl_quic", label: "cURL", fieldSet: ["host"] },
+        { id: "dhcp_discover", label: "DHCP DISCOVER", fieldSet: [] },
+        { id: "dns", label: "DNS", fieldSet: ["host"] },
+        { id: "dtls", label: "DTLS (WebRTC)", fieldSet: ["host"] },
+        { id: "llmnr", label: "LLMNR", fieldSet: ["host"] },
+        { id: "mdns", label: "mDNS", fieldSet: ["host"] },
+        { id: "nbns", label: "NBNS", fieldSet: ["host"] },
+        { id: "ntp", label: "NTP", fieldSet: [] },
+        { id: "quic", label: "QUIC", fieldSet: ["host"] },
+        { id: "rtcp", label: "RTCP", fieldSet: [] },
+        { id: "rtp", label: "RTP", fieldSet: [] },
+        { id: "sip", label: "SIP", fieldSet: ["host", "sipAction"], defaults: { sipAction: "OPTIONS" } },
+        { id: "ssdp", label: "SSDP", fieldSet: [] },
+        { id: "stun", label: "STUN", fieldSet: ["host"] },
+        { id: "utp", label: "uTP (BitTorrent)", fieldSet: [] }
     ];
     var DOMAIN_POOL = [
         "google.com", "amazon.com", "reddit.com", "github.com", "mozilla.org",
@@ -237,7 +228,6 @@
         payloadDynamicFields: ".payload-dynamic-fields",
         payloadError: ".payload-error"
     };
-    var CATEGORY_MAP = createMapById(CATEGORY_DEFS);
     var PROTOCOL_MAP = createMapById(PROTOCOL_CATALOG);
     var Generators = null;
     var dom = { initialized: false };
@@ -569,19 +559,17 @@
 
     function fillProtocolSelect(select, protocols, selectedId) {
         clearElement(select);
-        groupProtocolsByCategory(protocols).forEach(function (group) {
-            var optgroup = createElement("optgroup", { label: CATEGORY_MAP[group.categoryId].label });
-
-            group.protocols.forEach(function (protocol) {
-                optgroup.appendChild(createElement("option", {
-                    value: protocol.id,
-                    textContent: protocol.label,
-                    disabled: !isQuicLikeProtocolId(protocol.id)
-                }));
-            });
-
-            select.appendChild(optgroup);
+        var visibleProtocols = protocols.filter(function (protocol) {
+            return isQuicLikeProtocolId(protocol.id);
         });
+
+        visibleProtocols.forEach(function (protocol) {
+            select.appendChild(createElement("option", {
+                value: protocol.id,
+                textContent: protocol.label
+            }));
+        });
+
         select.value = selectedId;
     }
 
@@ -618,7 +606,7 @@
 
         if (hasAsyncProtocols && typeof ensureGenerators().generatePayloadAsync === "function") {
             generateOutputAsync().then(function (result) {
-                dom.output.value = result.lines.join("\n");
+                dom.output.value = result.lines.join("\n") + "\n";
             }).catch(function (error) {
                 console.error("Async generation failed:", error);
             });
@@ -639,7 +627,7 @@
             }
         });
 
-        dom.output.value = lines.join("\n");
+        dom.output.value = lines.join("\n") + "\n";
         return { mtu: mtu, lines: lines, capped: capped };
     }
 
@@ -831,23 +819,7 @@
 
     function listProtocols() {
         return PROTOCOL_CATALOG.slice().sort(function (left, right) {
-            var categoryCompare = CATEGORY_MAP[left.categoryId].rank - CATEGORY_MAP[right.categoryId].rank;
-            return categoryCompare || left.rank - right.rank || left.label.localeCompare(right.label);
-        });
-    }
-
-    function groupProtocolsByCategory(protocols) {
-        return CATEGORY_DEFS.slice().sort(function (left, right) {
-            return left.rank - right.rank;
-        }).map(function (category) {
-            return {
-                categoryId: category.id,
-                protocols: protocols.filter(function (protocol) {
-                    return protocol.categoryId === category.id;
-                })
-            };
-        }).filter(function (group) {
-            return group.protocols.length > 0;
+            return left.label.localeCompare(right.label);
         });
     }
 
@@ -1019,12 +991,10 @@
             MAX_OUTPUT_LINES: CONFIG.maxOutputLines,
             DEFAULT_MTU: CONFIG.defaultMtu,
             DEFAULT_HOST: CONFIG.defaultHost,
-            CATEGORY_DEFS: CATEGORY_DEFS,
             DOMAIN_SNAPSHOTS: { global: DOMAIN_POOL.slice() },
             PROTOCOL_CATALOG: PROTOCOL_CATALOG
         },
         catalog: {
-            categories: CATEGORY_DEFS,
             protocols: PROTOCOL_CATALOG,
             listProtocols: listProtocols
         },
