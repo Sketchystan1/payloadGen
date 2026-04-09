@@ -18,6 +18,16 @@
             <div class="page-header-row">
                 <h1 id="page-title">PayloadGen</h1>
                 <div class="header-actions">
+                    <a id="github-btn" class="btn btn-secondary icon-btn" href="https://github.com/Sketchystan1/payloadGen"
+                        target="_blank" rel="noreferrer noopener" aria-label="GitHub" title="GitHub">
+                        <span class="btn-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" focusable="false">
+                                <path
+                                    d="M12 .5C5.649.5.5 5.649.5 12c0 5.084 3.292 9.399 7.861 10.921.575.106.786-.25.786-.556 0-.274-.01-1-.015-1.963-3.197.695-3.872-1.541-3.872-1.541-.523-1.328-1.278-1.682-1.278-1.682-1.045-.714.079-.699.079-.699 1.155.081 1.763 1.186 1.763 1.186 1.026 1.758 2.693 1.25 3.349.956.104-.743.401-1.251.729-1.539-2.552-.29-5.236-1.276-5.236-5.681 0-1.255.448-2.282 1.183-3.087-.119-.29-.513-1.458.112-3.04 0 0 .965-.309 3.162 1.179A10.98 10.98 0 0 1 12 6.054c.975.005 1.957.132 2.874.387 2.195-1.488 3.158-1.179 3.158-1.179.627 1.582.233 2.75.115 3.04.737.805 1.181 1.832 1.181 3.087 0 4.416-2.688 5.388-5.248 5.673.412.354.779 1.053.779 2.122 0 1.532-.014 2.767-.014 3.144 0 .309.207.668.79.555C20.21 21.395 23.5 17.082 23.5 12 23.5 5.649 18.351.5 12 .5Z">
+                                </path>
+                            </svg>
+                        </span>
+                    </a>
                     <a id="donate-btn" class="btn btn-secondary donate-btn" href="https://boosty.to/sketchystan1"
                         target="_blank" rel="noreferrer noopener" aria-label="Donate" title="Donate">
                         <span class="btn-icon" aria-hidden="true">
@@ -36,41 +46,45 @@
             </p>
         </header>
 
+        <section class="controls-bar">
+            <div class="controls-left">
+                <button id="add-payload-btn" type="button" class="btn btn-ghost add-payload-btn">Add payload</button>
+                <button id="reset-btn" type="button" class="btn btn-ghost reset-btn">Reset</button>
+            </div>
+            <div class="controls-right">
+                <button id="copy-btn" type="button" class="btn btn-secondary" hidden>Copy</button>
+                <button id="generate-btn" type="button" class="btn btn-primary">Generate</button>
+            </div>
+        </section>
+
         <section class="layout-grid">
             <!-- Payload blocks are created entirely in app.js so new types/options only need JS changes. -->
-            <section id="blocks-panel" class="panel blocks-panel" aria-label="Payload blocks">
+            <section id="blocks-panel" class="panel blocks-panel" aria-label="Payload Blocks">
+                <div id="blocks-status" class="blocks-status" hidden></div>
                 <div id="payload-blocks" class="payload-blocks" aria-live="polite"></div>
             </section>
 
-            <section class="panel output-panel" aria-labelledby="output-label">
-
-                <div class="toolbar">
-                    <label class="field compact-field" for="mtu-input"
-                        style="flex-direction:row; align-items:center; gap:10px;">
-                        <span id="mtu-label" class="field-label">MTU</span>
-                        <input id="mtu-input" type="number" min="1" step="1" inputmode="numeric" value="1280">
-                        <label class="inline-checkbox" style="margin-left:auto;">
-                            <input id="pad-mtu-checkbox" type="checkbox">
-                            <span id="pad-mtu-label" class="checkbox-label" style="font-weight:normal;">Pad to
-                                MTU</span>
-                        </label>
-                    </label>
-
-                    <div class="button-row">
-                        <button id="add-payload-btn" type="button" class="btn btn-ghost">Add Payload</button>
-                        <button id="generate-btn" type="button" class="btn btn-primary">Generate</button>
-                        <button id="copy-btn" type="button" class="btn btn-secondary">Copy Output</button>
-                        <button id="reset-btn" type="button" class="btn btn-ghost">Reset</button>
-                    </div>
-                </div>
-                <label class="field output-field" for="output-text">
-                    <span id="output-label" class="field-label">Generated Output</span>
-                    <textarea id="output-text" rows="16" readonly spellcheck="false"
+            <section class="panel output-panel" aria-label="Generated output">
+                <div class="output-field">
+                    <textarea id="output-text" rows="16" readonly spellcheck="false" aria-label="Generated output"
                         placeholder="Press Generate to build i1..i5 lines."></textarea>
-                </label>
+                </div>
             </section>
         </section>
     </main>
+
+    <div id="preset-dialog-backdrop" class="dialog-backdrop" hidden>
+        <div id="preset-dialog" class="dialog-card" role="dialog" aria-modal="true"
+            aria-labelledby="preset-dialog-title" aria-describedby="preset-dialog-message" tabindex="-1">
+            <p class="dialog-eyebrow">Preset Active</p>
+            <h2 id="preset-dialog-title" class="dialog-title">Keep only this block?</h2>
+            <p id="preset-dialog-message" class="dialog-message"></p>
+            <div class="dialog-actions">
+                <button id="preset-dialog-no-btn" type="button" class="btn btn-ghost">No, keep all blocks</button>
+                <button id="preset-dialog-yes-btn" type="button" class="btn btn-primary">Yes, remove the rest</button>
+            </div>
+        </div>
+    </div>
 </body>
 
 </html>

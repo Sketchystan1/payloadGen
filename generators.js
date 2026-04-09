@@ -42,6 +42,77 @@
         "Firefox ICE stack",
         "Safari WebRTC networking"
     ];
+    var TWILIO_STUN_SERVERS = [
+        "global.stun.twilio.com"
+    ];
+    var TWILIO_TURN_SERVERS = [
+        "global.turn.twilio.com",
+        "de01-1.turn.twilio.com",
+        "de01-2.turn.twilio.com",
+        "sg01-1.turn.twilio.com",
+        "sg01-2.turn.twilio.com",
+        "us1-1.turn.twilio.com",
+        "us1-2.turn.twilio.com",
+        "us2-1.turn.twilio.com",
+        "us2-2.turn.twilio.com",
+        "ie01-1.turn.twilio.com",
+        "ie01-2.turn.twilio.com",
+        "jp01-1.turn.twilio.com",
+        "jp01-2.turn.twilio.com",
+        "au01-1.turn.twilio.com",
+        "br01-1.turn.twilio.com",
+        "in01-1.turn.twilio.com"
+    ];
+    var TWILIO_TURN_USERNAME_PREFIXES = [
+        "a1b2c3d4e5f6g7h8i9j0",
+        "1a2b3c4d5e6f7g8h9i0j",
+        "abcdef1234567890abcd",
+        "1234567890abcdef1234"
+    ];
+    var TWILIO_REALM = "twilio.com";
+    var GOOGLE_STUN_SERVERS = [
+        "stun.l.google.com",
+        "stun1.l.google.com",
+        "stun2.l.google.com",
+        "stun3.l.google.com",
+        "stun4.l.google.com",
+        "stun.services.googleapis.com",
+        "stun.phonebox.google.com",
+        "stun.stunprotocol.org"
+    ];
+    var CLOUDFLARE_WEBRTC_SERVERS = [
+        "turn.cloudflare.com",
+        "webrtc.cloudflare.net",
+        "spectrum.cloudflare.com",
+        "calls.cloudflare.com"
+    ];
+    var CLOUDFLARE_REALM = "cloudflare.com";
+    var META_WEBRTC_SERVERS = [
+        "turn.instagram.com",
+        "stun.whatsapp.com",
+        "edge-turn.whatsapp.com",
+        "turn-messenger.whatsapp.com",
+        "star.c10r.facebook.com",
+        "turn.dnsalias.com",
+        "edge-chat.facebook.com"
+    ];
+    var META_REALM = "facebook.com";
+    var WEBRTC_MEDIA_CODECS = [
+        { name: "opus", clockRate: 48000, channels: 2, payloadType: 111 },
+        { name: "G722", clockRate: 8000, channels: 1, payloadType: 9 },
+        { name: "PCMU", clockRate: 8000, channels: 1, payloadType: 0 },
+        { name: "PCMA", clockRate: 8000, channels: 1, payloadType: 8 },
+        { name: "VP8", clockRate: 90000, channels: 1, payloadType: 96 },
+        { name: "VP9", clockRate: 90000, channels: 1, payloadType: 98 },
+        { name: "H264", clockRate: 90000, channels: 1, payloadType: 102 }
+    ];
+    var WEBRTC_EXTENSIONS = [
+        { id: 1, uri: "urn:ietf:params:rtp-hdrext:ssrc-audio-level" },
+        { id: 2, uri: "http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time" },
+        { id: 3, uri: "http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01" },
+        { id: 4, uri: "urn:ietf:params:rtp-hdrext:sdes:mid" },
+        { id: 5, uri: "urn:3gpp:video-orientation" }
+    ];
     var DHCP_CLIENT_PROFILES = [
         { hostPrefix: "DESKTOP-", vendorClass: "MSFT 5.0", maxMessageSize: 1500, parameterRequestList: [0x01, 0x03, 0x06, 0x0F, 0x1F, 0x21, 0x2B, 0x2C, 0x2E, 0x2F, 0x79, 0xF9, 0xFC] },
         { hostPrefix: "android-", vendorClass: "android-dhcp-14", maxMessageSize: 1500, parameterRequestList: [0x01, 0x03, 0x06, 0x0F, 0x1A, 0x1C, 0x33, 0x3A, 0x3B, 0x79, 0xFC] },
@@ -56,7 +127,133 @@
     var SYSLOG_APP_NAMES = ["systemd", "sshd", "NetworkManager", "dnsmasq"];
     var SYSLOG_HOST_NAMES = ["edge-gw-01", "core-sw-02", "media-host", "workstation-15"];
     var MQTT_CLIENT_ID_PREFIXES = ["mqttjs_", "paho-", "esp32-", "sensor-"];
-    var SIP_USER_AGENT = "Linphone/5.2.5 (belle-sip/5.3.90)";
+    var SIP_USER_AGENTS = [
+        "Linphone/5.2.5 (belle-sip/5.3.90)",
+        "Zoiper rv2.10.15-mod",
+        "MicroSIP/3.21.6",
+        "baresip 3.8.0",
+        "Blink 6.0.4 (Windows)",
+        "Asterisk PBX 20.7.0"
+    ];
+    var SIP_SERVER_NAMES = [
+        "Kamailio (5.8.1)",
+        "OpenSIPS (3.5.1)",
+        "Asterisk PBX (20.7.0)",
+        "FreeSWITCH (1.10.12)",
+        "Yate SIP Router (7.0.0)"
+    ];
+    var SIP_DISPLAY_NAMES = [
+        "Alice Carter",
+        "Bob Smith",
+        "Support Desk",
+        "Sales Queue",
+        "NOC Bridge",
+        "Reception",
+        "Operator",
+        "Dispatch"
+    ];
+    var SIP_ACCEPT_LANGUAGES = [
+        "en",
+        "en-US",
+        "en-US,en;q=0.9",
+        "tr-TR,tr;q=0.9,en;q=0.7",
+        "de-DE,de;q=0.8,en;q=0.6"
+    ];
+    var SIP_SUPPORTED_HEADERS = [
+        "replaces, outbound, path, timer",
+        "outbound, path, gruu, 100rel",
+        "timer, replaces, resource-priority",
+        "gruu, outbound, path, sec-agree"
+    ];
+    var SIP_ALLOW_HEADERS = [
+        "INVITE, ACK, CANCEL, OPTIONS, BYE, REFER, NOTIFY, INFO, MESSAGE, SUBSCRIBE",
+        "INVITE, ACK, CANCEL, OPTIONS, BYE, UPDATE, MESSAGE",
+        "INVITE, ACK, CANCEL, OPTIONS, BYE, PRACK, UPDATE"
+    ];
+    var SIP_ALLOW_EVENTS_HEADERS = [
+        "presence, message-summary, refer",
+        "dialog, presence, refer",
+        "presence, kpml, talk"
+    ];
+    var SIP_DOMAIN_PREFIXES = ["sip", "voip", "pbx", "edge", "gw", "proxy", "media", "trunk"];
+    var SIP_DOMAIN_BASES = ["biloxi", "atlanta", "voicehub", "carriernet", "softswitch", "callbridge", "telecloud", "voiplab"];
+    var SIP_DOMAIN_SUFFIXES = ["com", "net", "org", "io", "cloud"];
+    var SIP_LOCAL_PORTS = [5060, 5062, 5070, 5080, 5160];
+    var SIP_AUDIO_CODEC_PROFILES = [
+        {
+            payloads: [
+                "0 PCMU/8000",
+                "8 PCMA/8000",
+                "96 opus/48000/2",
+                "101 telephone-event/8000"
+            ],
+            formatList: "0 8 96 101"
+        },
+        {
+            payloads: [
+                "0 PCMU/8000",
+                "18 G729/8000",
+                "101 telephone-event/8000"
+            ],
+            formatList: "0 18 101"
+        },
+        {
+            payloads: [
+                "8 PCMA/8000",
+                "97 iLBC/8000",
+                "101 telephone-event/8000"
+            ],
+            formatList: "8 97 101"
+        }
+    ];
+    var COAP_METHOD_CODES = {
+        GET: 0x01,
+        POST: 0x02,
+        PUT: 0x03,
+        DELETE: 0x04
+    };
+    var COAP_CONTENT_FORMATS = {
+        text: { id: "text", number: 0, mimeType: "text/plain;charset=utf-8" },
+        link: { id: "link", number: 40, mimeType: "application/link-format" },
+        octets: { id: "octets", number: 42, mimeType: "application/octet-stream" },
+        json: { id: "json", number: 50, mimeType: "application/json" },
+        cbor: { id: "cbor", number: 60, mimeType: "application/cbor" },
+        senml_json: { id: "senml_json", number: 110, mimeType: "application/senml+json" },
+        senml_cbor: { id: "senml_cbor", number: 112, mimeType: "application/senml+cbor" }
+    };
+    var COAP_DEFAULT_PATHS = {
+        GET: [
+            "/sensors/temp?units=c",
+            "/sensors/humidity",
+            "/device/status",
+            "/telemetry/current?if=sensor",
+            "/.well-known/core?rt=temperature-c"
+        ],
+        POST: [
+            "/telemetry/upload",
+            "/events",
+            "/ingest?confirm=1",
+            "/sensor/batch"
+        ],
+        PUT: [
+            "/actuators/led",
+            "/config/device",
+            "/thresholds/temp",
+            "/sampling/interval"
+        ],
+        DELETE: [
+            "/subscriptions/temp-alert",
+            "/cache/sensors/temp",
+            "/jobs/pending"
+        ]
+    };
+    var COAP_OBSERVE_PATHS = [
+        "/sensors/temp",
+        "/sensors/humidity",
+        "/telemetry/current",
+        "/device/status"
+    ];
+    var COAP_BLOCK_SIZES = [64, 128, 256];
     var CHROME_RUNTIME_PROFILE = {
         platform: "Windows",
         userAgentTemplate: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{uaVersion} Safari/537.36",
@@ -744,36 +941,544 @@
     }
 
     function generateStunPayload(options) {
-        var softwareAttr = buildStunAttribute(0x8022, encodeText(randomItem(STUN_SOFTWARE_NAMES)));
+        var mergedOptions = normalizeIceOptions(options);
+        mergedOptions.iceMode = "binding";
+        return generateUnifiedStunTurnPayload(mergedOptions);
+    }
+
+    function generateStunBindingPayload(options) {
+        var mergedOptions = normalizeIceOptions(options);
+        mergedOptions.iceMode = "binding";
+        return generateUnifiedStunTurnPayload(mergedOptions);
+    }
+
+    function generateTurnAllocatePayload(options) {
+        var mergedOptions = normalizeIceOptions(options);
+        if (!mergedOptions.iceProvider) {
+            mergedOptions.iceProvider = "twilio";
+        }
+        mergedOptions.iceMode = "allocate";
+        return generateUnifiedStunTurnPayload(mergedOptions);
+    }
+
+    function generateStunTurnPayload(options) {
+        var mergedOptions = normalizeIceOptions(options);
+        if (!mergedOptions.iceMode) {
+            mergedOptions.iceMode = "auto";
+        }
+        return generateUnifiedStunTurnPayload(mergedOptions);
+    }
+
+    function generateUnifiedStunTurnPayload(options) {
+        var mergedOptions = normalizeIceOptions(options);
+        var profile = resolveStunTurnProfile(mergedOptions && mergedOptions.iceProvider);
+        var mode = resolveStunTurnMode(mergedOptions, profile);
+        var serverHost = resolveStunTurnServerHost(mergedOptions, profile);
+        var softwareName = typeof profile.softwareName === "function" ? profile.softwareName() : profile.softwareName;
+        var priorityAttr = buildStunAttribute(0x0024, u32(randomUint32() | 0x40000000));
+        var controlAttr = buildStunIceControlAttribute();
+        var usernameBytes = mode === "allocate"
+            ? buildStunAllocateUsername(profile, serverHost)
+            : buildStunBindingUsername(profile, serverHost);
+        var attrs = [];
+        var requestedAddressFamily;
+        var lifetime;
+
+        if (mode === "allocate") {
+            requestedAddressFamily = randomIntExclusive(2) === 0 ? 0x0001 : 0x0002;
+            lifetime = profile.lifetimeRange[0] + randomIntExclusive(profile.lifetimeRange[1] - profile.lifetimeRange[0]);
+
+            attrs.push(buildStunAttribute(0x0014, encodeText(profile.realm)));
+            attrs.push(buildStunAttribute(0x000D, u32(lifetime)));
+            attrs.push(buildStunAttribute(0x0019, concatBytes(u32(0x00000011), zeroBytes(4))));
+            attrs.push(buildStunAttribute(0x8027, Uint8Array.from([0x00, requestedAddressFamily, 0x00, 0x00])));
+        }
+
+        attrs.push(buildStunAttribute(0x8022, encodeText(softwareName)));
+        attrs.push(priorityAttr);
+        attrs.push(controlAttr);
+        attrs.push(buildStunAttribute(0x0006, usernameBytes));
+
+        return finalizeStunTurnPayload(mode === "allocate" ? 0x000A : 0x0001, attrs, mergedOptions);
+    }
+
+    function resolveStunTurnProfile(stunType) {
+        var provider = normalizeIceProvider(stunType);
+
+        if (provider === "random") {
+            return resolveStunTurnProfile(randomItem(["google", "cloudflare", "meta", "twilio", "twilio_stun"]));
+        }
+
+        if (provider === "twilio_stun") {
+            return {
+                id: "twilio",
+                serverPool: TWILIO_STUN_SERVERS,
+                realm: TWILIO_REALM,
+                softwareName: "Twilio WebRTC ICE agent",
+                preferredMode: "binding",
+                autoAllocateProbability: 0,
+                supportsAllocate: false,
+                lifetimeRange: [300, 600]
+            };
+        }
+
+        if (provider === "twilio") {
+            return {
+                id: "twilio",
+                serverPool: TWILIO_TURN_SERVERS,
+                realm: TWILIO_REALM,
+                softwareName: "Twilio WebRTC ICE agent",
+                preferredMode: "allocate",
+                autoAllocateProbability: 0.67,
+                supportsAllocate: true,
+                lifetimeRange: [300, 600]
+            };
+        }
+
+        if (provider === "cloudflare") {
+            return {
+                id: "cloudflare",
+                serverPool: CLOUDFLARE_WEBRTC_SERVERS,
+                realm: CLOUDFLARE_REALM,
+                softwareName: "Cloudflare WebRTC client",
+                autoAllocateProbability: 0.67,
+                supportsAllocate: true,
+                lifetimeRange: [600, 1200]
+            };
+        }
+
+        if (provider === "meta") {
+            return {
+                id: "meta",
+                serverPool: META_WEBRTC_SERVERS,
+                realm: META_REALM,
+                softwareName: function () {
+                    return randomItem(["WhatsApp/2", "Instagram/2", "Messenger WebRTC"]);
+                },
+                autoAllocateProbability: 0.75,
+                supportsAllocate: true,
+                lifetimeRange: [180, 600]
+            };
+        }
+
+        return {
+            id: "google",
+            serverPool: GOOGLE_STUN_SERVERS,
+            realm: "google.com",
+            softwareName: "Google STUN client",
+            autoAllocateProbability: 0,
+            supportsAllocate: false,
+            lifetimeRange: [300, 600]
+        };
+    }
+
+    function resolveStunTurnMode(options, profile) {
+        var requestedMode = options && typeof options.iceMode === "string" ? options.iceMode : "auto";
+
+        if (requestedMode === "binding") {
+            return "binding";
+        }
+
+        if (requestedMode === "allocate") {
+            return profile.supportsAllocate ? "allocate" : "binding";
+        }
+
+        if (profile.preferredMode === "binding") {
+            return "binding";
+        }
+
+        if (profile.preferredMode === "allocate") {
+            return profile.supportsAllocate ? "allocate" : "binding";
+        }
+
+        if (!profile.supportsAllocate) {
+            return "binding";
+        }
+
+        return Math.random() < profile.autoAllocateProbability ? "allocate" : "binding";
+    }
+
+    function resolveStunTurnServerHost(options, profile) {
+        var overrideHost = normalizeOptionalHost(options && (options.iceServerHost || options.stunServerHost || options.host));
+        return overrideHost || randomItem(profile.serverPool);
+    }
+
+    function buildStunBindingUsername(profile, serverHost) {
+        if (profile.id === "meta") {
+            return encodeText("WA-" + String(1000000000 + randomIntExclusive(9000000000)) + ":" + serverHost);
+        }
+
+        if (profile.id === "twilio") {
+            return encodeText(randomItem(TWILIO_TURN_USERNAME_PREFIXES) + ":" + serverHost);
+        }
+
+        return encodeText(bytesToHex(randomBytes(4)) + ":" + serverHost);
+    }
+
+    function buildStunAllocateUsername(profile, serverHost) {
+        var usernameSuffix;
+
+        if (profile.id === "meta") {
+            return encodeText("WA-" + String(1000000000 + randomIntExclusive(9000000000)) + "@" + serverHost);
+        }
+
+        usernameSuffix = String(randomIntExclusive(9000) + 1000);
+
+        if (profile.id === "twilio") {
+            return encodeText(randomItem(TWILIO_TURN_USERNAME_PREFIXES) + usernameSuffix + "@" + serverHost);
+        }
+
+        return encodeText(bytesToHex(randomBytes(8)) + usernameSuffix + "@" + serverHost);
+    }
+
+    function buildStunIceControlAttribute() {
+        return buildStunAttribute(
+            randomIntExclusive(2) === 0 ? 0x8029 : 0x802A,
+            concatBytes(u32(randomUint32()), u32(randomUint32()))
+        );
+    }
+
+    function finalizeStunTurnPayload(messageType, attrs, options) {
+        var payload = buildStunMessageWithFingerprint(messageType, attrs);
+        var targetSize = resolveStunTurnTargetPacketSize(options);
+
+        if (targetSize > payload.length) {
+            return concatBytes(payload, zeroBytes(targetSize - payload.length));
+        }
+
+        return payload;
+    }
+
+    function resolveStunTurnTargetPacketSize(options) {
+        var targetPacketSize = options ? Number(options.stunTurnTargetPacketSize) : NaN;
+        var mtu = options ? Number(options.mtu) : NaN;
+
+        if (options && options.stunTurnPadToMtu && Number.isFinite(mtu) && mtu > 0) {
+            return Math.max(100, Math.floor(mtu));
+        }
+
+        if (Number.isFinite(targetPacketSize) && targetPacketSize > 0) {
+            return Math.max(100, Math.floor(targetPacketSize));
+        }
+
+        return 0;
+    }
+
+    function generateGoogleStunPayload(options) {
+        var serverHost = randomItem(GOOGLE_STUN_SERVERS);
+        var softwareAttr = buildStunAttribute(0x8022, encodeText("Google STUN client"));
         var priorityAttr = buildStunAttribute(0x0024, u32(randomUint32() | 0x40000000));
         var controlAttr = buildStunAttribute(randomIntExclusive(2) === 0 ? 0x8029 : 0x802A, concatBytes(u32(randomUint32()), u32(randomUint32())));
-        var usernameBytes = encodeText(bytesToHex(randomBytes(4)) + ":" + normalizeHost(options.host));
+        var usernameBytes = encodeText(bytesToHex(randomBytes(4)) + ":" + serverHost);
         var usernameAttr = buildStunAttribute(0x0006, usernameBytes);
         var transactionId = randomBytes(12);
-        var messageWithoutFingerprint = concatBytes(
-            u16(0x0001),
-            u16(softwareAttr.length + priorityAttr.length + controlAttr.length + usernameAttr.length),
-            u32(0x2112A442),
-            transactionId,
-            softwareAttr,
-            priorityAttr,
-            controlAttr,
-            usernameAttr
-        );
-        var fingerprintValue = u32((crc32(messageWithoutFingerprint) ^ 0x5354554E) >>> 0);
-        var fingerprintAttr = buildStunAttribute(0x8028, fingerprintValue);
+        var attrs = [softwareAttr, priorityAttr, controlAttr, usernameAttr];
+        var messageWithoutFingerprint;
+        var fingerprintAttr;
+        var payload;
 
-        return concatBytes(
+        messageWithoutFingerprint = concatBytes(
             u16(0x0001),
-            u16(softwareAttr.length + priorityAttr.length + controlAttr.length + usernameAttr.length + fingerprintAttr.length),
+            u16(attrs.reduce(function (sum, attr) { return sum + attr.length; }, 0)),
             u32(0x2112A442),
             transactionId,
-            softwareAttr,
-            priorityAttr,
-            controlAttr,
-            usernameAttr,
+            concatBytes.apply(null, attrs)
+        );
+
+        var fingerprintValue = u32((crc32(messageWithoutFingerprint) ^ 0x5354554E) >>> 0);
+        fingerprintAttr = buildStunAttribute(0x8028, fingerprintValue);
+
+        payload = concatBytes(
+            u16(0x0001),
+            u16(attrs.reduce(function (sum, attr) { return sum + attr.length; }, 0) + fingerprintAttr.length),
+            u32(0x2112A442),
+            transactionId,
+            concatBytes.apply(null, attrs),
             fingerprintAttr
         );
+
+        var targetSize = resolveStunTurnTargetPacketSize(options);
+        if (targetSize > payload.length) {
+            var paddingAttr = buildStunAttribute(0x8029, zeroBytes(targetSize - payload.length - 4));
+            attrs.splice(attrs.length - 1, 0, paddingAttr);
+
+            messageWithoutFingerprint = concatBytes(
+                u16(0x0001),
+                u16(attrs.reduce(function (sum, attr) { return sum + attr.length; }, 0)),
+                u32(0x2112A442),
+                transactionId,
+                concatBytes.apply(null, attrs)
+            );
+
+            var newFingerprintValue = u32((crc32(messageWithoutFingerprint) ^ 0x5354554E) >>> 0);
+            var newFingerprintAttr = buildStunAttribute(0x8028, newFingerprintValue);
+
+            payload = concatBytes(
+                u16(0x0001),
+                u16(attrs.reduce(function (sum, attr) { return sum + attr.length; }, 0) + newFingerprintAttr.length),
+                u32(0x2112A442),
+                transactionId,
+                concatBytes.apply(null, attrs),
+                newFingerprintAttr
+            );
+        }
+
+        return payload;
+    }
+
+    function generateCloudflareWebrtcPayload(options) {
+        var isTurn = randomIntExclusive(3) !== 0;
+        var messageType = isTurn ? 0x000A : 0x0001;
+        var serverHost = randomItem(CLOUDFLARE_WEBRTC_SERVERS);
+        var usernamePrefix = bytesToHex(randomBytes(8));
+        var usernameSuffix = randomIntExclusive(9000) + 1000;
+        var lifetime = isTurn ? (600 + randomIntExclusive(600)) : 0;
+        var requestedTransport = isTurn ? 0x00000011 : 0;
+        var requestedAddressFamily = randomIntExclusive(2) === 0 ? 0x0001 : 0x0002;
+        var softwareAttr = buildStunAttribute(0x8022, encodeText("Cloudflare WebRTC client"));
+        var priorityAttr = buildStunAttribute(0x0024, u32(randomUint32() | 0x40000000));
+        var controlAttr = buildStunAttribute(randomIntExclusive(2) === 0 ? 0x8029 : 0x802A, concatBytes(u32(randomUint32()), u32(randomUint32())));
+        var fingerprintAttr;
+        var usernameBytes;
+        var usernameAttr;
+        var lifetimeAttr;
+        var requestedTransportAttr;
+        var requestedAddressFamilyAttr;
+        var realmAttr;
+        var attrs = [];
+        var messageWithoutFingerprint;
+        var transactionId = randomBytes(12);
+        var payload;
+
+        if (isTurn) {
+            usernameBytes = encodeText(usernamePrefix + String(usernameSuffix) + "@" + CLOUDFLARE_REALM);
+            realmAttr = buildStunAttribute(0x0014, encodeText(CLOUDFLARE_REALM));
+            lifetimeAttr = buildStunAttribute(0x000D, u32(lifetime));
+            requestedTransportAttr = buildStunAttribute(0x0019, concatBytes(u32(requestedTransport), zeroBytes(4)));
+            requestedAddressFamilyAttr = buildStunAttribute(0x8027, Uint8Array.from([0x00, requestedAddressFamily, 0x00, 0x00]));
+            attrs.push(realmAttr);
+            attrs.push(lifetimeAttr);
+            attrs.push(requestedTransportAttr);
+            attrs.push(requestedAddressFamilyAttr);
+        } else {
+            usernameBytes = encodeText(bytesToHex(randomBytes(4)) + ":" + serverHost);
+        }
+
+        usernameAttr = buildStunAttribute(0x0006, usernameBytes);
+        attrs.push(softwareAttr);
+        attrs.push(priorityAttr);
+        attrs.push(controlAttr);
+        attrs.push(usernameAttr);
+
+        messageWithoutFingerprint = concatBytes(
+            u16(messageType),
+            u16(attrs.reduce(function (sum, attr) { return sum + attr.length; }, 0)),
+            u32(0x2112A442),
+            transactionId
+        );
+        messageWithoutFingerprint = concatBytes(messageWithoutFingerprint, concatBytes.apply(null, attrs));
+
+        var fingerprintValue = u32((crc32(messageWithoutFingerprint) ^ 0x5354554E) >>> 0);
+        fingerprintAttr = buildStunAttribute(0x8028, fingerprintValue);
+
+        payload = concatBytes(
+            u16(messageType),
+            u16(attrs.reduce(function (sum, attr) { return sum + attr.length; }, 0) + fingerprintAttr.length),
+            u32(0x2112A442),
+            transactionId,
+            concatBytes.apply(null, attrs),
+            fingerprintAttr
+        );
+
+        var targetSize = resolveStunTurnTargetPacketSize(options);
+        if (targetSize > payload.length) {
+            var paddingAttr = buildStunAttribute(0x8029, zeroBytes(targetSize - payload.length - 4));
+            attrs.splice(attrs.length - 1, 0, paddingAttr);
+
+            messageWithoutFingerprint = concatBytes(
+                u16(messageType),
+                u16(attrs.reduce(function (sum, attr) { return sum + attr.length; }, 0)),
+                u32(0x2112A442),
+                transactionId,
+                concatBytes.apply(null, attrs)
+            );
+
+            var newFingerprintValue = u32((crc32(messageWithoutFingerprint) ^ 0x5354554E) >>> 0);
+            var newFingerprintAttr = buildStunAttribute(0x8028, newFingerprintValue);
+
+            payload = concatBytes(
+                u16(messageType),
+                u16(attrs.reduce(function (sum, attr) { return sum + attr.length; }, 0) + newFingerprintAttr.length),
+                u32(0x2112A442),
+                transactionId,
+                concatBytes.apply(null, attrs),
+                newFingerprintAttr
+            );
+        }
+
+        return payload;
+    }
+
+    function generateMetaWebrtcPayload(options) {
+        var isTurn = randomIntExclusive(4) !== 0;
+        var messageType = isTurn ? 0x000A : 0x0001;
+        var serverHost = randomItem(META_WEBRTC_SERVERS);
+        var whatsappUser = String(1000000000 + randomIntExclusive(9000000000));
+        var usernamePrefix = "WA-" + whatsappUser;
+        var lifetime = isTurn ? (180 + randomIntExclusive(420)) : 0;
+        var requestedTransport = isTurn ? 0x00000011 : 0;
+        var requestedAddressFamily = randomIntExclusive(2) === 0 ? 0x0001 : 0x0002;
+        var softwareAttr = buildStunAttribute(0x8022, encodeText(randomItem(["WhatsApp/2", "Instagram/2", "Messenger WebRTC"])));
+        var priorityAttr = buildStunAttribute(0x0024, u32(randomUint32() | 0x40000000));
+        var controlAttr = buildStunAttribute(randomIntExclusive(2) === 0 ? 0x8029 : 0x802A, concatBytes(u32(randomUint32()), u32(randomUint32())));
+        var fingerprintAttr;
+        var usernameBytes;
+        var usernameAttr;
+        var lifetimeAttr;
+        var requestedTransportAttr;
+        var requestedAddressFamilyAttr;
+        var realmAttr;
+        var attrs = [];
+        var messageWithoutFingerprint;
+        var transactionId = randomBytes(12);
+        var payload;
+
+        if (isTurn) {
+            usernameBytes = encodeText(usernamePrefix + "@" + META_REALM);
+            realmAttr = buildStunAttribute(0x0014, encodeText(META_REALM));
+            lifetimeAttr = buildStunAttribute(0x000D, u32(lifetime));
+            requestedTransportAttr = buildStunAttribute(0x0019, concatBytes(u32(requestedTransport), zeroBytes(4)));
+            requestedAddressFamilyAttr = buildStunAttribute(0x8027, Uint8Array.from([0x00, requestedAddressFamily, 0x00, 0x00]));
+            attrs.push(realmAttr);
+            attrs.push(lifetimeAttr);
+            attrs.push(requestedTransportAttr);
+            attrs.push(requestedAddressFamilyAttr);
+        } else {
+            usernameBytes = encodeText(bytesToHex(randomBytes(4)) + ":" + serverHost);
+        }
+
+        usernameAttr = buildStunAttribute(0x0006, usernameBytes);
+        attrs.push(softwareAttr);
+        attrs.push(priorityAttr);
+        attrs.push(controlAttr);
+        attrs.push(usernameAttr);
+
+        messageWithoutFingerprint = concatBytes(
+            u16(messageType),
+            u16(attrs.reduce(function (sum, attr) { return sum + attr.length; }, 0)),
+            u32(0x2112A442),
+            transactionId
+        );
+        messageWithoutFingerprint = concatBytes(messageWithoutFingerprint, concatBytes.apply(null, attrs));
+
+        var fingerprintValue = u32((crc32(messageWithoutFingerprint) ^ 0x5354554E) >>> 0);
+        fingerprintAttr = buildStunAttribute(0x8028, fingerprintValue);
+
+        payload = concatBytes(
+            u16(messageType),
+            u16(attrs.reduce(function (sum, attr) { return sum + attr.length; }, 0) + fingerprintAttr.length),
+            u32(0x2112A442),
+            transactionId,
+            concatBytes.apply(null, attrs),
+            fingerprintAttr
+        );
+
+        var targetSize = resolveStunTurnTargetPacketSize(options);
+        if (targetSize > payload.length) {
+            var paddingAttr = buildStunAttribute(0x8029, zeroBytes(targetSize - payload.length - 4));
+            attrs.splice(attrs.length - 1, 0, paddingAttr);
+
+            messageWithoutFingerprint = concatBytes(
+                u16(messageType),
+                u16(attrs.reduce(function (sum, attr) { return sum + attr.length; }, 0)),
+                u32(0x2112A442),
+                transactionId,
+                concatBytes.apply(null, attrs)
+            );
+
+            var newFingerprintValue = u32((crc32(messageWithoutFingerprint) ^ 0x5354554E) >>> 0);
+            var newFingerprintAttr = buildStunAttribute(0x8028, newFingerprintValue);
+
+            payload = concatBytes(
+                u16(messageType),
+                u16(attrs.reduce(function (sum, attr) { return sum + attr.length; }, 0) + newFingerprintAttr.length),
+                u32(0x2112A442),
+                transactionId,
+                concatBytes.apply(null, attrs),
+                newFingerprintAttr
+            );
+        }
+
+        return payload;
+    }
+
+    function generateWebrtcCombinedPayload(options) {
+        var targetSize = resolveStunTurnTargetPacketSize(options);
+        var shouldPad = options.stunTurnPadToMtu;
+        
+        var stunOptions = Object.keys(options).reduce(function (opts, key) {
+            opts[key] = options[key];
+            return opts;
+        }, {});
+        stunOptions.stunTurnPadToMtu = false;
+        
+        var stunPayload = generateStunBindingPayload(stunOptions);
+        var normalizedIce = normalizeIceOptions(options);
+        var dtlsOptions = { host: normalizedIce.iceServerHost || normalizedIce.host || "stun.l.google.com" };
+        var dtlsPayload = generateDtlsPayload(dtlsOptions);
+        var rtpPayload = generateRtpPayload();
+        var rtcpPayload = generateRtcpPayload();
+
+        var combinedPayload = concatBytes(stunPayload, dtlsPayload, rtpPayload, rtcpPayload);
+
+        if (shouldPad && targetSize > combinedPayload.length) {
+            var paddingNeeded = targetSize - combinedPayload.length;
+            combinedPayload = concatBytes(combinedPayload, zeroBytes(paddingNeeded));
+        } else if (shouldPad && targetSize > 0) {
+            combinedPayload = combinedPayload.subarray(0, targetSize);
+        }
+
+        return combinedPayload;
+    }
+
+    function normalizeIceProvider(rawValue) {
+        var value = String(rawValue || "").trim().toLowerCase();
+        if (!value) {
+            return "";
+        }
+        if (value === "random") {
+            return "random";
+        }
+        if (value === "twilio_turn" || value === "twilio") {
+            return "twilio";
+        }
+        if (value === "twilio_stun") {
+            return "twilio_stun";
+        }
+        if (value === "google" || value === "cloudflare" || value === "meta") {
+            return value;
+        }
+        return value;
+    }
+
+    function normalizeIceOptions(options) {
+        var merged = Object.assign({}, options || {});
+        var mappedProvider = merged.iceProvider || merged.stunType;
+        var mappedMode = merged.iceMode || merged.stunMode;
+        var mappedServerHost = typeof merged.iceServerHost === "undefined" ? merged.stunServerHost : merged.iceServerHost;
+
+        merged.iceProvider = normalizeIceProvider(mappedProvider) || "google";
+
+        if (typeof mappedMode !== "undefined") {
+            merged.iceMode = String(mappedMode);
+        }
+
+        if (!mappedServerHost && merged.host) {
+            mappedServerHost = merged.host;
+        }
+
+        merged.iceServerHost = normalizeOptionalHost(mappedServerHost);
+        return merged;
     }
 
     function generateDtlsPayload(options) {
@@ -797,38 +1502,190 @@
     }
 
     function generateSipPayload(options) {
-        var host = normalizeHost(options.host);
-        var action = options.sipAction === "REGISTER" ? "REGISTER" : "OPTIONS";
+        var host = resolveSipHost(options);
+        var action = resolveSipMessageType(options.sipAction);
         var localIp = randomPrivateIpv4();
-        var localPort = 5060;
-        var sipUser = String(1000 + randomIntExclusive(9000));
-        var branch = "z9hG4bK" + bytesToHex(randomBytes(7));
-        var tag = bytesToHex(randomBytes(5));
-        var callId = bytesToHex(randomBytes(10)) + "@" + localIp;
-        var toUri = "<sip:" + sipUser + "@" + host + ">";
-        var requestUri = action === "REGISTER" ? "sip:" + host : "sip:" + sipUser + "@" + host;
-        var lines = [
-            action + " " + requestUri + " SIP/2.0",
-            "Via: SIP/2.0/UDP " + localIp + ":" + localPort + ";branch=" + branch + ";rport",
-            "Max-Forwards: 70",
-            "From: <sip:" + sipUser + "@" + host + ">;tag=" + tag,
-            "To: " + toUri,
-            "Call-ID: " + callId,
-            "CSeq: 1 " + action,
-            "Contact: <sip:" + sipUser + "@" + localIp + ":" + localPort + ";transport=udp>",
-            "User-Agent: " + SIP_USER_AGENT,
-            "Allow: INVITE, ACK, CANCEL, OPTIONS, BYE, REFER, NOTIFY, INFO, MESSAGE, SUBSCRIBE",
-            action === "REGISTER"
-                ? "Supported: replaces, outbound, gruu, path"
-                : "Supported: replaces, outbound, path, timer",
-            action === "REGISTER" ? "Allow-Events: presence, message-summary, refer" : "Accept: application/sdp",
-            action === "REGISTER" ? "Expires: 600" : "Accept-Language: en",
-            "Content-Length: 0",
-            "",
-            ""
-        ];
+        var localPort = randomItem(SIP_LOCAL_PORTS);
+        var fromUser = randomSipUserPart();
+        var toUser = action === "REGISTER" ? fromUser : randomSipUserPart();
+        var fromDisplay = randomItem(SIP_DISPLAY_NAMES);
+        var toDisplay = action === "REGISTER" ? fromDisplay : randomItem(SIP_DISPLAY_NAMES);
+        var branch = "z9hG4bK" + bytesToHex(randomBytes(9));
+        var tag = bytesToHex(randomBytes(6));
+        var callId = bytesToHex(randomBytes(12)) + "@" + host;
+        var cseq = 1 + randomIntExclusive(50);
+        var userAgent = randomItem(SIP_USER_AGENTS);
+        var allowHeader = randomItem(SIP_ALLOW_HEADERS);
+        var supportedHeader = randomItem(SIP_SUPPORTED_HEADERS);
+        var allowEventsHeader = randomItem(SIP_ALLOW_EVENTS_HEADERS);
+        var acceptLanguage = randomItem(SIP_ACCEPT_LANGUAGES);
+        var toUri = formatSipAddress(toDisplay, toUser, host);
+        var fromUri = formatSipAddress(fromDisplay, fromUser, host);
+        var requestUri = action === "REGISTER" ? "sip:" + host : "sip:" + toUser + "@" + host;
+        var inviteBody = action === "INVITE" ? buildSipInviteBody(fromUser, host) : "";
+        var lines;
+
+        if (action === "RANDOM") {
+            var actions = ["OPTIONS", "REGISTER", "INVITE", "TRYING"];
+            action = randomItem(actions);
+            return generateSipPayload(Object.assign({}, options, { sipAction: action }));
+        }
+
+        if (action === "TRYING") {
+            lines = [
+                "SIP/2.0 100 CONNECTING",
+                "Via: SIP/2.0/UDP " + localIp + ":" + localPort + ";branch=" + branch + ";rport",
+                "To: " + toUri,
+                "From: " + fromUri + ";tag=" + tag,
+                "Call-ID: " + callId,
+                "CSeq: " + cseq + " INVITE",
+                "Server: " + randomItem(SIP_SERVER_NAMES),
+                "Content-Length: 0",
+                "",
+                ""
+            ];
+        } else if (action === "REGISTER") {
+            lines = [
+                "REGISTER " + requestUri + " SIP/2.0",
+                "Via: SIP/2.0/UDP " + localIp + ":" + localPort + ";branch=" + branch + ";rport",
+                "Max-Forwards: 70",
+                "From: " + fromUri + ";tag=" + tag,
+                "To: " + toUri,
+                "Call-ID: " + callId,
+                "CSeq: " + cseq + " REGISTER",
+                "Contact: <sip:" + fromUser + "@" + localIp + ":" + localPort + ";transport=udp>",
+                "User-Agent: " + userAgent,
+                "Allow: " + allowHeader,
+                "Supported: " + supportedHeader,
+                "Allow-Events: " + allowEventsHeader,
+                "Expires: " + randomItem([300, 600, 900, 1200, 1800, 3600]),
+                "Content-Length: 0",
+                "",
+                ""
+            ];
+        } else if (action === "INVITE") {
+            lines = [
+                "INVITE " + requestUri + " SIP/2.0",
+                "Via: SIP/2.0/UDP " + localIp + ":" + localPort + ";branch=" + branch + ";rport",
+                "Max-Forwards: 70",
+                "From: " + fromUri + ";tag=" + tag,
+                "To: " + toUri,
+                "Call-ID: " + callId,
+                "CSeq: " + cseq + " INVITE",
+                "Contact: <sip:" + fromUser + "@" + localIp + ":" + localPort + ";transport=udp>",
+                "User-Agent: " + userAgent,
+                "Allow: " + allowHeader,
+                "Supported: " + supportedHeader,
+                "Content-Type: application/sdp",
+                "Content-Length: " + encodeText(inviteBody).length,
+                "",
+                inviteBody
+            ];
+        } else {
+            lines = [
+                "OPTIONS " + requestUri + " SIP/2.0",
+                "Via: SIP/2.0/UDP " + localIp + ":" + localPort + ";branch=" + branch + ";rport",
+                "Max-Forwards: 70",
+                "From: " + fromUri + ";tag=" + tag,
+                "To: " + toUri,
+                "Call-ID: " + callId,
+                "CSeq: " + cseq + " OPTIONS",
+                "Contact: <sip:" + fromUser + "@" + localIp + ":" + localPort + ";transport=udp>",
+                "User-Agent: " + userAgent,
+                "Allow: " + allowHeader,
+                "Supported: " + supportedHeader,
+                "Accept: application/sdp",
+                "Accept-Language: " + acceptLanguage,
+                "Content-Length: 0",
+                "",
+                ""
+            ];
+        }
 
         return encodeText(lines.join("\r\n"));
+    }
+
+    function resolveSipMessageType(value) {
+        var normalized = String(value || "OPTIONS").trim().toUpperCase();
+
+        if (normalized === "REGISTER" ||
+            normalized === "INVITE" ||
+            normalized === "TRYING" ||
+            normalized === "TRYING_100") {
+            if (normalized === "TRYING_100") {
+                return "TRYING";
+            }
+
+            return normalized;
+        }
+
+        return "OPTIONS";
+    }
+
+    function resolveSipHost(options) {
+        var useCustomMessage = options && options.sipCustomMessage;
+
+        if (!useCustomMessage) {
+            return CONFIG.defaultHost;
+        }
+
+        if (options && options.hasCustomHost) {
+            return normalizeHost(options.host);
+        }
+
+        return generateRandomSipDomain();
+    }
+
+    function generateRandomSipDomain() {
+        var base = randomItem(SIP_DOMAIN_BASES);
+        var suffix = randomItem(SIP_DOMAIN_SUFFIXES);
+        var includePrefix = randomIntExclusive(3) !== 0;
+
+        if (!includePrefix) {
+            return base + "." + suffix;
+        }
+
+        return randomItem(SIP_DOMAIN_PREFIXES) + "-" + (10 + randomIntExclusive(90)) + "." + base + "." + suffix;
+    }
+
+    function randomSipUserPart() {
+        var prefix = randomItem(["100", "101", "200", "300", "400", "500", "alice", "bob", "support", "sales", "noc", "ops"]);
+        return prefix + (100 + randomIntExclusive(900));
+    }
+
+    function formatSipAddress(displayName, user, host) {
+        return "\"" + displayName + "\" <sip:" + user + "@" + host + ">";
+    }
+
+    function buildSipInviteBody(originUser, host) {
+        var mediaIp = randomPrivateIpv4();
+        var audioPort = 12000 + randomIntExclusive(20000);
+        var sessionId = String(1000000000 + randomIntExclusive(900000000));
+        var codecProfile = randomItem(SIP_AUDIO_CODEC_PROFILES);
+
+        return [
+            "v=0",
+            "o=" + originUser + " " + sessionId + " " + (Number(sessionId) + 1) + " IN IP4 " + mediaIp,
+            "s=Call",
+            "c=IN IP4 " + mediaIp,
+            "t=0 0",
+            "m=audio " + audioPort + " RTP/AVP " + codecProfile.formatList,
+            "a=rtcp:" + (audioPort + 1) + " IN IP4 " + mediaIp,
+            "a=sendrecv",
+            "a=ptime:" + randomItem([20, 30, 40]),
+            "a=maxptime:" + randomItem([60, 80, 120]),
+            "a=rtcp-mux",
+            "a=ice-ufrag:" + bytesToHex(randomBytes(4)),
+            "a=ice-pwd:" + bytesToHex(randomBytes(12)),
+            "a=fingerprint:sha-256 " + bytesToHex(randomBytes(32)).match(/.{1,2}/g).join(":").toUpperCase(),
+            "a=setup:actpass",
+            "a=msid-semantic: WMS " + originUser,
+            "a=rtcp-fb:* transport-cc"
+        ].concat(codecProfile.payloads.map(function (payloadDef) {
+            return "a=rtpmap:" + payloadDef;
+        })).concat([
+            "a=ssrc:" + randomUint32() + " cname:" + originUser + "@" + host
+        ]).join("\r\n");
     }
 
     function generateRtpPayload() {
@@ -875,19 +1732,296 @@
     }
 
     function generateCoapPayload(options) {
-        var token = randomBytes(2 + randomIntExclusive(7));
-        var messageId = randomIntExclusive(65535);
-        var isPost = options.coapMethod === "POST";
-        var code = isPost ? 0x02 : 0x01;
-        var requestOptions = buildCoapOptions(options.host, options.path, isPost);
-        var payload = isPost ? concatBytes(Uint8Array.from([0xFF]), encodeText("{\"status\":\"ok\"}")) : zeroBytes(0);
+        var request = buildCoapRequestProfile(options);
 
         return concatBytes(
-            Uint8Array.from([(randomIntExclusive(2) === 0 ? 0x40 : 0x50) | token.length, code]),
-            u16(messageId),
-            token,
-            requestOptions,
-            payload
+            Uint8Array.from([0x40 | (request.messageType << 4) | request.token.length, request.code]),
+            u16(request.messageId),
+            request.token,
+            buildCoapOptions(request),
+            request.payload.length ? concatBytes(Uint8Array.from([0xFF]), request.payload) : zeroBytes(0)
+        );
+    }
+
+    function buildCoapRequestProfile(options) {
+        var method = resolveCoapMethod(options.coapMethod);
+        var observe = !!options.coapObserve && method === "GET";
+        var path = resolveCoapPath(options.path, method, observe);
+        observe = observe && path.indexOf("/.well-known/core") !== 0;
+        var mediaType = resolveCoapMediaType(options.coapMediaType, method, path, observe);
+        var fullPayload = buildCoapRequestPayload(method, mediaType, path);
+        var blockPlan = resolveCoapBlockPlan(options.coapBlockMode, method, observe, fullPayload.length);
+        var payload = fullPayload;
+
+        if (blockPlan.mode === "block1" && payload.length > blockPlan.size) {
+            payload = payload.slice(0, blockPlan.size);
+        }
+
+        return {
+            host: normalizeHost(options.host),
+            path: path,
+            method: method,
+            code: COAP_METHOD_CODES[method],
+            messageType: resolveCoapMessageType(options.coapMessageType, observe, blockPlan.mode, method),
+            messageId: randomIntExclusive(65536),
+            token: randomBytes(resolveCoapTokenLength(observe, blockPlan.mode)),
+            observe: observe,
+            contentFormat: hasCoapRequestPayload(method) ? mediaType : null,
+            accept: shouldUseCoapAccept(method, observe) ? mediaType : null,
+            payload: payload,
+            blockMode: blockPlan.mode,
+            blockSize: blockPlan.size,
+            blockMore: blockPlan.mode === "block1" && fullPayload.length > payload.length,
+            originalPayloadLength: fullPayload.length
+        };
+    }
+
+    function resolveCoapMethod(rawMethod) {
+        var normalized = String(rawMethod || "GET").trim().toUpperCase();
+        return Object.prototype.hasOwnProperty.call(COAP_METHOD_CODES, normalized) ? normalized : "GET";
+    }
+
+    function resolveCoapPath(rawPath, method, observe) {
+        var normalized = normalizePath(rawPath);
+
+        if (normalized !== "/") {
+            return normalized;
+        }
+
+        if (observe) {
+            return randomItem(COAP_OBSERVE_PATHS);
+        }
+
+        return randomItem(COAP_DEFAULT_PATHS[method] || COAP_DEFAULT_PATHS.GET);
+    }
+
+    function resolveCoapMediaType(rawMediaType, method, path, observe) {
+        var normalized = String(rawMediaType || "auto").trim().toLowerCase();
+
+        if (Object.prototype.hasOwnProperty.call(COAP_CONTENT_FORMATS, normalized)) {
+            return COAP_CONTENT_FORMATS[normalized];
+        }
+
+        if (path.indexOf("/.well-known/core") === 0) {
+            return COAP_CONTENT_FORMATS.link;
+        }
+
+        if (observe || method === "GET" || method === "DELETE") {
+            return randomItem([
+                COAP_CONTENT_FORMATS.text,
+                COAP_CONTENT_FORMATS.json,
+                COAP_CONTENT_FORMATS.cbor,
+                COAP_CONTENT_FORMATS.senml_json,
+                COAP_CONTENT_FORMATS.senml_cbor
+            ]);
+        }
+
+        return randomItem([
+            COAP_CONTENT_FORMATS.json,
+            COAP_CONTENT_FORMATS.cbor,
+            COAP_CONTENT_FORMATS.senml_json,
+            COAP_CONTENT_FORMATS.senml_cbor,
+            COAP_CONTENT_FORMATS.text,
+            COAP_CONTENT_FORMATS.octets
+        ]);
+    }
+
+    function resolveCoapMessageType(rawType, observe, blockMode, method) {
+        var normalized = String(rawType || "AUTO").trim().toUpperCase();
+
+        if (normalized === "CON") {
+            return 0;
+        }
+
+        if (normalized === "NON") {
+            return 1;
+        }
+
+        if (observe || blockMode !== "none" || method === "POST" || method === "PUT") {
+            return 0;
+        }
+
+        return randomIntExclusive(3) === 0 ? 1 : 0;
+    }
+
+    function resolveCoapTokenLength(observe, blockMode) {
+        if (observe || blockMode !== "none") {
+            return randomItem([2, 4, 6, 8]);
+        }
+
+        return randomItem([0, 1, 2, 4]);
+    }
+
+    function resolveCoapBlockPlan(rawMode, method, observe, payloadLength) {
+        var normalized = String(rawMode || "auto").trim().toLowerCase();
+        var size;
+
+        if (normalized === "auto") {
+            if (hasCoapRequestPayload(method) && payloadLength > 48) {
+                normalized = "block1";
+            } else if (!hasCoapRequestPayload(method) && (observe || method === "GET")) {
+                normalized = randomIntExclusive(2) === 0 ? "block2" : "none";
+            } else {
+                normalized = "none";
+            }
+        }
+
+        if (normalized === "block1" && !hasCoapRequestPayload(method)) {
+            normalized = "none";
+        }
+
+        if (normalized === "block2" && !(observe || method === "GET")) {
+            normalized = "none";
+        }
+
+        size = normalized === "none" ? 0 : randomItem(COAP_BLOCK_SIZES);
+
+        return {
+            mode: normalized === "block1" || normalized === "block2" ? normalized : "none",
+            size: size
+        };
+    }
+
+    function hasCoapRequestPayload(method) {
+        return method === "POST" || method === "PUT";
+    }
+
+    function shouldUseCoapAccept(method, observe) {
+        return observe || method === "GET" || method === "DELETE";
+    }
+
+    function buildCoapRequestPayload(method, mediaType, path) {
+        if (!hasCoapRequestPayload(method)) {
+            return zeroBytes(0);
+        }
+
+        if (mediaType.id === "json") {
+            return encodeText(JSON.stringify(buildCoapStateObject(method, path)));
+        }
+
+        if (mediaType.id === "cbor") {
+            return encodeCbor(buildCoapStateObject(method, path, true));
+        }
+
+        if (mediaType.id === "senml_json") {
+            return encodeText(JSON.stringify(buildCoapSenmlRecords(path)));
+        }
+
+        if (mediaType.id === "senml_cbor") {
+            return encodeCbor(buildCoapSenmlRecords(path, true));
+        }
+
+        if (mediaType.id === "link") {
+            return encodeText(buildCoapLinkFormatPayload());
+        }
+
+        if (mediaType.id === "octets") {
+            return buildCoapBinaryPayload(path);
+        }
+
+        return encodeText(buildCoapTextPayload(method, path));
+    }
+
+    function buildCoapStateObject(method, path, compact) {
+        var segments = splitPathAndQuery(path).segments;
+        var tail = segments.length ? segments[segments.length - 1] : "resource";
+        var nowSeconds = Math.floor(Date.now() / 1000);
+
+        if (tail === "led" || path.indexOf("/actuators/") === 0) {
+            return compact ? {
+                op: method.toLowerCase(),
+                path: normalizePath(path),
+                on: randomIntExclusive(2) === 0,
+                bri: 10 + randomIntExclusive(90),
+                ts: nowSeconds
+            } : {
+                operation: method.toLowerCase(),
+                path: normalizePath(path),
+                enabled: randomIntExclusive(2) === 0,
+                brightness: 10 + randomIntExclusive(90),
+                transition_ms: 100 + randomIntExclusive(900),
+                applied_at: new Date(nowSeconds * 1000).toISOString()
+            };
+        }
+
+        if (path.indexOf("/config/") === 0 || path.indexOf("/thresholds/") === 0 || path.indexOf("/sampling/") === 0) {
+            return compact ? {
+                op: method.toLowerCase(),
+                path: normalizePath(path),
+                int: 15 + randomIntExclusive(180),
+                th: 200 + randomIntExclusive(160),
+                ts: nowSeconds
+            } : {
+                operation: method.toLowerCase(),
+                path: normalizePath(path),
+                sampling_interval_s: 15 + randomIntExclusive(180),
+                threshold_c_x10: 200 + randomIntExclusive(160),
+                profile: randomItem(["eco", "balanced", "burst"]),
+                revision: 1 + randomIntExclusive(32),
+                applied_at: new Date(nowSeconds * 1000).toISOString()
+            };
+        }
+
+        return compact ? {
+            op: method.toLowerCase(),
+            path: normalizePath(path),
+            dev: "node-" + bytesToHex(randomBytes(2)),
+            t: 180 + randomIntExclusive(140),
+            h: 35 + randomIntExclusive(40),
+            ts: nowSeconds
+        } : {
+            operation: method.toLowerCase(),
+            path: normalizePath(path),
+            device: "node-" + bytesToHex(randomBytes(2)),
+            temperature_c_x10: 180 + randomIntExclusive(140),
+            humidity_pct: 35 + randomIntExclusive(40),
+            battery_pct: 50 + randomIntExclusive(50),
+            sequence: 1 + randomIntExclusive(5000),
+            recorded_at: new Date(nowSeconds * 1000).toISOString()
+        };
+    }
+
+    function buildCoapSenmlRecords(path, compact) {
+        var baseName = normalizePath(path) + "/";
+        var nowSeconds = Math.floor(Date.now() / 1000);
+        var firstValue = 180 + randomIntExclusive(140);
+        var secondValue = 35 + randomIntExclusive(40);
+
+        if (compact) {
+            return [
+                { bn: baseName, bt: nowSeconds, n: "temp", u: "Cel", v: firstValue },
+                { n: "hum", u: "%RH", v: secondValue }
+            ];
+        }
+
+        return [
+            { bn: baseName, bt: nowSeconds, n: "temperature", u: "Cel", v: firstValue },
+            { n: "humidity", u: "%RH", v: secondValue }
+        ];
+    }
+
+    function buildCoapTextPayload(method, path) {
+        var normalizedPath = normalizePath(path);
+        var value = 180 + randomIntExclusive(140);
+        return "op=" + method.toLowerCase() + " path=" + normalizedPath + " value_c_x10=" + value + " humidity=" + (35 + randomIntExclusive(40));
+    }
+
+    function buildCoapLinkFormatPayload() {
+        return [
+            "</sensors/temp>;rt=\"temperature-c\";if=\"sensor\"",
+            "</sensors/humidity>;rt=\"humidity\";if=\"sensor\"",
+            "</actuators/led>;rt=\"core.a\";if=\"actuator\"",
+            "</device/status>;rt=\"status\";if=\"core.s\""
+        ].join(",");
+    }
+
+    function buildCoapBinaryPayload(path) {
+        return concatBytes(
+            encodeText("COAP"),
+            u32(Math.floor(Date.now() / 1000) >>> 0),
+            encodeText(normalizePath(path)),
+            Uint8Array.from([0x00]),
+            randomBytes(24 + randomIntExclusive(16))
         );
     }
 
@@ -1622,34 +2756,155 @@
         return [protocol];
     }
 
-    function buildCoapOptions(host, path, isPost) {
-        var currentOptionNumber = 0;
-        var parts = [];
-        var pathParts = splitPathAndQuery(path);
+    function buildCoapOptions(request) {
+        var optionList = [];
+        var pathParts = splitPathAndQuery(request.path);
 
-        if (host) {
-            parts.push(encodeCoapOption(3 - currentOptionNumber, encodeText(host)));
-            currentOptionNumber = 3;
+        if (request.host) {
+            optionList.push({ number: 3, valueBytes: encodeText(request.host) });
+        }
+
+        if (request.observe) {
+            optionList.push({ number: 6, valueBytes: zeroBytes(0) });
         }
 
         pathParts.segments.forEach(function (segment) {
-            parts.push(encodeCoapOption(11 - currentOptionNumber, encodeText(segment)));
-            currentOptionNumber = 11;
+            optionList.push({ number: 11, valueBytes: encodeText(segment) });
         });
 
-        if (isPost) {
-            parts.push(encodeCoapOption(12 - currentOptionNumber, Uint8Array.from([50])));
-            currentOptionNumber = 12;
+        if (request.contentFormat) {
+            optionList.push({ number: 12, valueBytes: encodeCoapUint(request.contentFormat.number) });
         }
 
         pathParts.query.forEach(function (querySegment) {
-            parts.push(encodeCoapOption(15 - currentOptionNumber, encodeText(querySegment)));
-            currentOptionNumber = 15;
+            optionList.push({ number: 15, valueBytes: encodeText(querySegment) });
         });
 
-        parts.push(encodeCoapOption(17 - currentOptionNumber, Uint8Array.from([50])));
+        if (request.accept) {
+            optionList.push({ number: 17, valueBytes: encodeCoapUint(request.accept.number) });
+        }
 
-        return concatBytes.apply(null, parts);
+        if (request.blockMode === "block2") {
+            optionList.push({ number: 23, valueBytes: encodeCoapUint(buildCoapBlockOptionValue(0, false, request.blockSize)) });
+        }
+
+        if (request.blockMode === "block1") {
+            optionList.push({ number: 27, valueBytes: encodeCoapUint(buildCoapBlockOptionValue(0, request.blockMore, request.blockSize)) });
+            optionList.push({ number: 60, valueBytes: encodeCoapUint(request.originalPayloadLength) });
+        }
+
+        return encodeCoapOptions(optionList);
+    }
+
+    function encodeCoapOptions(optionList) {
+        var currentOptionNumber = 0;
+
+        return concatBytes.apply(null, optionList.map(function (option) {
+            var encoded = encodeCoapOption(option.number - currentOptionNumber, option.valueBytes);
+            currentOptionNumber = option.number;
+            return encoded;
+        }));
+    }
+
+    function encodeCoapUint(value) {
+        var normalized = Math.max(0, Math.floor(value));
+        var bytes = [];
+
+        while (normalized > 0) {
+            bytes.unshift(normalized & 0xFF);
+            normalized = Math.floor(normalized / 256);
+        }
+
+        return Uint8Array.from(bytes);
+    }
+
+    function buildCoapBlockOptionValue(blockNumber, more, blockSize) {
+        return (blockNumber << 4) | (more ? 0x08 : 0x00) | resolveCoapBlockSizeExponent(blockSize);
+    }
+
+    function resolveCoapBlockSizeExponent(blockSize) {
+        var normalizedSize = Math.max(16, Math.floor(blockSize || 0));
+        return Math.max(0, Math.min(6, Math.round(Math.log(normalizedSize) / Math.LN2) - 4));
+    }
+
+    function encodeCbor(value) {
+        var parts;
+        var keys;
+
+        if (value === null || typeof value === "undefined") {
+            return Uint8Array.from([0xF6]);
+        }
+
+        if (value === false) {
+            return Uint8Array.from([0xF4]);
+        }
+
+        if (value === true) {
+            return Uint8Array.from([0xF5]);
+        }
+
+        if (value instanceof Uint8Array) {
+            return concatBytes(encodeCborHead(2, value.length), value);
+        }
+
+        if (typeof value === "string") {
+            return encodeCborText(value);
+        }
+
+        if (typeof value === "number" && Number.isFinite(value)) {
+            return encodeCborNumber(value);
+        }
+
+        if (Array.isArray(value)) {
+            parts = [encodeCborHead(4, value.length)];
+            value.forEach(function (item) {
+                parts.push(encodeCbor(item));
+            });
+            return concatBytes.apply(null, parts);
+        }
+
+        if (typeof value === "object") {
+            keys = Object.keys(value);
+            parts = [encodeCborHead(5, keys.length)];
+            keys.forEach(function (key) {
+                parts.push(encodeCborText(key));
+                parts.push(encodeCbor(value[key]));
+            });
+            return concatBytes.apply(null, parts);
+        }
+
+        return Uint8Array.from([0xF6]);
+    }
+
+    function encodeCborText(text) {
+        var bytes = encodeText(text);
+        return concatBytes(encodeCborHead(3, bytes.length), bytes);
+    }
+
+    function encodeCborNumber(value) {
+        var integer = Math.round(value);
+
+        if (integer < 0) {
+            return encodeCborHead(1, Math.abs(integer + 1));
+        }
+
+        return encodeCborHead(0, integer);
+    }
+
+    function encodeCborHead(majorType, value) {
+        if (value < 24) {
+            return Uint8Array.from([(majorType << 5) | value]);
+        }
+
+        if (value < 256) {
+            return Uint8Array.from([(majorType << 5) | 24, value]);
+        }
+
+        if (value < 65536) {
+            return concatBytes(Uint8Array.from([(majorType << 5) | 25]), u16(value));
+        }
+
+        return concatBytes(Uint8Array.from([(majorType << 5) | 26]), u32(value >>> 0));
     }
 
     function resolveBrowserProfile(browserVersion) {
@@ -1854,6 +3109,43 @@
         );
     }
 
+    function buildStunMessageWithFingerprint(messageType, attrs, paddingAttr) {
+        var transactionId = randomBytes(12);
+        var allAttrs = attrs.slice();
+        
+        if (paddingAttr) {
+            allAttrs.push(paddingAttr);
+        }
+        
+        var attrBytes = concatBytes.apply(null, allAttrs);
+        var attrLength = attrBytes.length;
+        var totalAttrLength = attrLength + 8;
+        
+        var messageForCrc = concatBytes(
+            u16(messageType),
+            u16(totalAttrLength),
+            u32(0x2112A442),
+            transactionId,
+            attrBytes,
+            u16(0x8028),
+            u16(4)
+        );
+        
+        var crcValue = (crc32(messageForCrc) ^ 0x5354554E) >>> 0;
+        var fingerprintAttr = buildStunAttribute(0x8028, u32(crcValue));
+        
+        var finalMessage = concatBytes(
+            u16(messageType),
+            u16(totalAttrLength),
+            u32(0x2112A442),
+            transactionId,
+            attrBytes,
+            fingerprintAttr
+        );
+        
+        return finalMessage;
+    }
+
     function crc32(bytes) {
         var crc = 0xFFFFFFFF;
         var index;
@@ -2039,6 +3331,10 @@
     function normalizeHost(rawValue) {
         var host = String(rawValue || "").trim();
         return host || CONFIG.defaultHost;
+    }
+
+    function normalizeOptionalHost(rawValue) {
+        return String(rawValue || "").trim();
     }
 
     function normalizePath(rawValue) {
@@ -2699,6 +3995,10 @@
         quic: generateQuicPayload,
         curl_quic: generateCapturedCurlQuicPayload,
         stun: generateStunPayload,
+        stun_binding: generateStunBindingPayload,
+        turn_allocate: generateTurnAllocatePayload,
+        stun: generateStunTurnPayload,
+        webrtc_combined: generateWebrtcCombinedPayload,
         dtls: generateDtlsPayload,
         sip: generateSipPayload,
         rtp: generateRtpPayload,
