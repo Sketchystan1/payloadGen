@@ -131,8 +131,11 @@ textarea:focus-visible,
     border: 1px solid var(--border);
     background: var(--panel);
     padding: 16px;
-    margin-bottom: 16px;
     min-width: 0;
+}
+
+.layout-grid > .panel {
+    margin-bottom: 0;
 }
 
 .blocks-status {
@@ -479,7 +482,7 @@ textarea {
     margin: 0 0 12px;
     font-size: 16px;
     font-weight: 600;
-    height: 39px;
+    min-height: 39px;
 }
 
 .block-title-actions {
@@ -685,6 +688,19 @@ textarea {
         width: 100%;
     }
 
+    .page-header-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .header-actions {
+        width: auto;
+        justify-content: flex-end;
+        flex-wrap: nowrap;
+    }
+
     .header-actions .btn,
     .button-row .btn {
         flex: 1 1 100%;
@@ -696,8 +712,29 @@ textarea {
         width: 42px;
     }
 
-    .toolbar-group {
+    .page-header h1 {
+        font-size: 24px;
+        line-height: 1.1;
+    }
+
+    .controls-bar {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 12px;
+    }
+
+    .controls-left,
+    .controls-right {
         width: 100%;
+    }
+
+    .controls-left .btn,
+    .controls-right .btn {
+        flex: 1 1 0;
+    }
+
+    .toolbar-group {
+        width: auto;
         align-items: center;
     }
 
@@ -707,27 +744,87 @@ textarea {
         flex-wrap: wrap;
     }
 
-    .payload-title-wrap {
+    .block-title {
         width: 100%;
-        flex-direction: row;
-        align-items: center;
-        justify-content: space-between;
+        height: auto;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+        margin-bottom: 10px;
+    }
+
+    .block-title-actions {
+        width: 100%;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+    }
+
+    .block-title-actions .payload-protocol,
+    .block-title-actions .remove-payload-btn {
+        width: 100%;
     }
 
     .host-field-row {
-        flex-wrap: nowrap;
+        flex-direction: row;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 8px 10px;
+    }
+
+    .host-field-row .inline-checkbox {
+        flex: 0 0 auto;
+    }
+
+    .host-field-row input[type="text"],
+    .host-field-row select {
+        flex: 1 1 0;
+        width: auto;
+        min-width: 0;
     }
 
     .host-field-actions {
         width: 100%;
+        flex-wrap: wrap;
     }
 
     .host-field-actions .btn {
-        flex: 1 1 auto;
+        flex: 1 1 100%;
+    }
+
+    .checkbox-row {
+        flex-direction: row;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 8px 10px;
+    }
+
+    .checkbox-row .toolbar-group {
+        width: auto;
+        margin-left: auto;
+        flex: 0 0 auto;
+    }
+
+    .inline-checkbox {
+        white-space: normal;
     }
 
     .payload-dynamic-fields {
         grid-template-columns: 1fr;
+    }
+
+    .payload-dynamic-fields > * {
+        grid-column: 1 / -1;
+    }
+
+    .payload-protocol-hint-row {
+        align-items: flex-start;
+    }
+
+    .payload-protocol-hint-message {
+        white-space: normal;
+        overflow: visible;
+        text-overflow: clip;
     }
 
     .dialog-actions .btn {
