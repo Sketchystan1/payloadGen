@@ -23,8 +23,8 @@
     var CONFIG = {
         maxBlocks: 5,
         maxOutputLines: 5,
-        minMtu: 1280,
-        maxMtu: 1450,
+        minMtu: 1200,
+        maxMtu: 1500,
         defaultMtu: 1280,
         defaultHost: "gosuslugi.ru",
         browserDataUrl: "https://versionhistory.googleapis.com/v1/chrome/platforms/win/channels/stable/versions/all/releases?page_size=1&order_by=version%20desc"
@@ -1569,7 +1569,6 @@
 
         mtuInput.addEventListener("input", function () {
             syncMtuInputWidth(mtuInput);
-            setSharedMtu(mtuInput.value);
             clearBlockError(block);
         });
 
