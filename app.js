@@ -26,14 +26,14 @@
         minMtu: 1200,
         maxMtu: 1500,
         defaultMtu: 1280,
-        defaultHost: "gosuslugi.ru",
+        defaultHost: "apteka.ru",
         browserDataUrl: "https://versionhistory.googleapis.com/v1/chrome/platforms/win/channels/stable/versions/all/releases?page_size=1&order_by=version%20desc"
     };
     var CHROME_BROWSER_DATA = {
-        updatedAt: "2026-04-01T20:26:32.318Z",
-        defaultVersion: "147.0.7727.50",
-        uaVersion: "147.0.0.0",
-        userAgent: buildChromeUserAgent("147.0.0.0")
+        updatedAt: "2026-11-04T18:02:22.736177Z",
+        defaultVersion: "158.0.8127.18",
+        uaVersion: "158.0.0.0",
+        userAgent: buildChromeUserAgent("158.0.0.0")
     };
 
     function updateChromeBrowserData(version, updatedAt) {
@@ -289,23 +289,7 @@
     var PRESET_MAP = createMapById(BLOCK_PRESETS);
     var PRESET_PROTOCOL_HINTS = createPresetProtocolMap(BLOCK_PRESETS);
     var DOMAIN_POOL = [
-        "google.com", "amazon.com", "reddit.com", "github.com", "mozilla.org",
-        "microsoft.com", "apple.com", "cloudflare.com", "bing.com", "adobe.com", "stackoverflow.com", 
-        "office.com", "dropbox.com", "zoom.us", "spotify.com", "imdb.com", 
-        "wikipedia.org", "yandex.ru", "ozon.ru", "vk.com", "google.com", "gismeteo.ru", "mail.ru", 
-        "kinopoisk.ru", "pinterest.com", "dzen.ru", "rutube.ru", "gdz.ru", "apple.com", "rbc.ru", 
-        "wildberries.ru", "asna.ru", "ya.ru", "vidal.ru", "banki.ru", "sberbank.ru", "ria.ru", "tbank.ru", 
-        "championat.com", "fandom.com", "rambler.ru", "kp.ru", "dns-shop.ru", "russianfood.com", "eapteka.ru",
-        "chatgpt.com", "avito.ru", "2gis.ru", "cbr.ru", "ivi.ru", "gosuslugi.ru", "pozdravok.com",
-        "microsoft.com", "kino-teatr.ru", "consultant.ru", "lenta.ru", "auto.ru", "smclinic.ru", 
-        "steampowered.com", "funpay.com", "rustore.ru", "okko.tv", "domclick.ru", "sports.ru", "cian.ru", 
-        "drom.ru", "investing.com", "gastronom.ru", "24smi.org", "sravni.ru", "iamcook.ru", "vseinstrumenti.ru", 
-        "planetazdorovo.ru", "wiktionary.org", "soccer365.ru", "aviasales.ru", "sovcombank.ru", "irecommend.ru",
-        "sportbox.ru", "freepik.com", "gemotest.ru", "invitro.ru", "github.com", "tutu.ru", "skysmart.ru", "vtb.ru", 
-        "goldapple.ru", "ok.ru", "kareliameteo.ru", "pikabu.ru", "deepl.com", "meteoinfo.ru", "tripadvisor.ru", 
-        "iz.ru", "megapteka.ru", "apteka.ru", "reverso.net", "hh.ru", "primpogoda.ru", "habr.com", 
-        "gdz-raketa.ru", "uchi.ru", "lamoda.ru", "deti-online.com", "promokodi.net", "gorzdrav.org", 
-        "uiscom.ru", "primbank.ru"
+        "175bru.ru", "1tv.ru", "2an.ru", "2gis.ru", "360tv.ru", "4ege.ru", "5-tv.ru", "9111.ru", "akbars.ru", "allhockey.ru", "amalgama-lab.com", "apteka.ru", "aptekamos.ru", "arbitr.ru", "arhangelskoe.su", "artchive.ru", "arzamas.academy", "asna.ru", "ati.su", "autonews.ru", "av.ru", "avtovzglyad.ru", "baby.ru", "babyblog.ru", "bashinform.ru", "bbr.ru", "beeline.ru", "belkacar.ru", "blizko.ru", "bolshoi.ru", "borodino.ru", "bspb.ru", "c2dns.net", "c2dns.ru", "cdek.ru", "championat.com", "chitalnya.ru", "consmed.ru", "consultant.ru", "cosmo.ru", "ctc.ru", "culture.ru", "dalenabank.ru", "datalesson.ru", "deepseek.com", "delimobil.ru", "delivery-club.ru", "dellin.ru", "dixy.ru", "dnevnik.ru", "dns-shop.ru", "docdoc.ru", "doctis.ru", "domashniy.ru", "doverie-tv.ru", "dzen.ru", "e-katalog.ru", "eapteka.ru", "edadeal.ru", "edimdoma.ru", "edu.ru", "elibrary.ru", "f1news.ru", "fantlab.ru", "fedsfm.ru", "fighttime.ru", "filmpro.ru", "fipi.ru", "fips.ru", "fitseven.ru", "forumhouse.ru", "foxford.ru", "friday.ru", "fsb.ru", "fss.ru", "fssprus.ru", "garant.ru", "gaso.ru", "gismeteo.ru", "gks.ru", "gosfilmofond.ru", "goskatalog.ru", "habr.ru", "health-diet.ru", "hermitagemuseum.org", "hi-news.ru", "histrf.ru", "ilibrary.ru", "in-space.ru", "indicator.ru", "infourok.ru", "interneturok.ru", "invb.ru", "irecommend.ru", "is74.ru", "ivi.ru", "joomag.com", "jv.ru", "karcher.ru", "kartaslov.ru", "karusel-tv.ru", "khl.ru", "kinopoisk.ru", "knigogid.ru", "kodeks.ru", "kolesa.ru", "kommersant.ru", "kopilkaurokov.ru", "kp.ru", "kreml.ru", "lektorium.tv", "letidor.ru", "lib.ru", "linkgroup.ru", "litres.ru", "livejournal.com", "livelib.ru", "livesport.ru", "lizaalert.org", "m24.ru", "maam.ru", "magnit.ru", "mail.ru", "mariinsky.ru", "matchtv.ru", "med-otzyv.ru", "medi.ru", "mediametrics.ru", "medicalinsider.ru", "medihost.ru", "medikforum.ru", "medlinks.ru", "medportal.ru", "medside.ru", "megafon.ru", "mel.fm", "mirtesen.ru", "mirtv.ru", "mkala.ru", "mob-edu.ru", "moluch.ru", "moskb.ru", "mts.ru", "multiurok.ru", "mybook.ru", "myskills.ru", "naked-science.ru", "nat-geo.ru", "nauchniestati.ru", "netology.ru", "nevasport.ru", "nic.ru", "nkj.ru", "nplus1.ru", "nskbl.ru", "nsportal.ru", "ntv.ru", "nukadeti.ru", "obrazovaka.ru", "ohotniki.ru", "olimpiada.ru", "onlinedoctor.ru", "onlinetrade.ru", "oprf.ru", "otr-online.ru", "otzovik.com", "oum.ru", "ped-kopilka.ru", "pedsovet.org", "pervbank.ru", "pikabu.ru", "pochtabank.ru", "popmech.ru", "postupi.online", "povar.ru", "professionali.ru", "profi.ru", "proza.ru", "psbank.ru", "pypi.org", "radiomayak.ru", "radiorus.ru", "radiovesti.ru", "rbc.ru", "ren.tv", "rgo.ru", "ria.ru", "rlsnet.ru", "rosbank.ru", "rosreestr.ru", "rosuchebnik.ru", "rsl.ru", "rt.ru", "rulit.me", "rusarchives.ru", "rusmuseum.ru", "rusneb.ru", "russkiiyazyk.ru", "rustih.ru", "rutube.ru", "samlib.ru", "sdamgia.ru", "selfpub.ru", "shm.ru", "sirius.online", "skyeng.ru", "sledcom.ru", "sm-news.ru", "smi2.ru", "smotrim.ru", "soccer.ru", "sovcombank.ru", "sovsport.ru", "spastv.ru", "sport24.ru", "sportmail.ru", "sportrbc.ru", "sportsdaily.ru", "stihi.ru", "sudact.ru", "sudrf.ru", "tamtam.chat", "tatar-inform.ru", "tele2.ru", "teleprogramma.pro", "tiu.ru", "tnt-online.ru", "tretyakovgallery.ru", "trudvsem.ru", "tv3.ru", "tvc.ru", "tvkultura.ru", "tvzvezda.ru", "ucheba.ru", "uchi.ru", "uchportal.ru", "unicreditbank.ru", "ura.news", "uteka.ru", "utkonos.ru", "vbr.ru", "verumreactor.ru", "vesti.ru", "vgtrk.ru", "videouroki.net", "vitrina.tv", "vk.ru", "vkvideo.ru", "vm.ru", "vokrugsveta.ru", "vrachirf.ru", "vsrf.ru", "webinar.ru", "wi-fi.ru", "wikireading.ru", "woman.ru", "worldskills.ru", "xn--80aesfpebagmfblc0a.xn--p1ai", "xn--80afcdbalict6afooklqi5o.xn--p1ai", "xn--j1ahfl.xn--p1ai", "xn----7sbb5adknde1cb0dyd.xn--p1ai", "xn--2020-f4dsa7cb5cl7h.xn--p1ai", "yaklass.ru", "youdo.com", "youla.ru", "zakon.ru", "zdorovie.ru", "zdorovieinfo.ru", "znaika.ru", "zoon.ru"
     ];
     var IDS = {
         donateButton: "donate-btn",
@@ -455,7 +439,7 @@
     }
 
     function buildRandomPresetSipHost() {
-        var baseDomain = pickWeightedRankedDomain(DOMAIN_POOL);
+        var baseDomain = pickRandomDomain(DOMAIN_POOL);
         var shouldUseSipSubdomain = Math.random() < 0.65;
 
         if (!shouldUseSipSubdomain) {
@@ -774,7 +758,7 @@
         });
         if (randomButton) {
             randomButton.addEventListener("click", function () {
-                setFieldValue(block, fieldId, pickWeightedRankedDomain(DOMAIN_POOL));
+                setFieldValue(block, fieldId, pickRandomDomain(DOMAIN_POOL));
                 syncBlockUi(block);
                 clearBlockError(block);
             });
@@ -1863,29 +1847,12 @@
         return protocols.some(function (protocol) { return protocol.id === protocolId; });
     }
 
-    function pickWeightedRankedDomain(domains) {
-        var totalWeight = 0;
-        var roll;
-        var index;
-
+    function pickRandomDomain(domains) {
         if (!domains || !domains.length) {
             return CONFIG.defaultHost;
         }
 
-        for (index = 0; index < domains.length; index += 1) {
-            totalWeight += domains.length - index;
-        }
-
-        roll = Math.floor(Math.random() * Math.max(1, totalWeight));
-
-        for (index = 0; index < domains.length; index += 1) {
-            roll -= domains.length - index;
-            if (roll < 0) {
-                return domains[index];
-            }
-        }
-
-        return domains[0];
+        return domains[Math.floor(Math.random() * domains.length)];
     }
 
     function isKnownProtocol(protocolId) {
@@ -2181,7 +2148,8 @@
             bytesToHex: bytesToHex,
             chunkPayload: chunkPayload,
             formatOutputLines: formatOutputLines,
-            pickWeightedRankedDomain: pickWeightedRankedDomain
+            pickRandomDomain: pickRandomDomain,
+            pickWeightedRankedDomain: pickRandomDomain
         },
         generators: {
             generatePayload: function (protocolId, options) {
